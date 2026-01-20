@@ -1,0 +1,20 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Top-left to bottom-right gradient (blue to pink) -->
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7AAED4"/>
+      <stop offset="50%" style="stop-color:#8aa5c5"/>
+      <stop offset="100%" style="stop-color:#c5a5a5"/>
+    </linearGradient>
+    <!-- Top-right to bottom-left gradient (slate to green) -->
+    <linearGradient id="grad2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a5a6a"/>
+      <stop offset="50%" style="stop-color:#6a8a7a"/>
+      <stop offset="100%" style="stop-color:#5BB09A"/>
+    </linearGradient>
+  </defs>
+  <!-- Top-left to bottom-right bar -->
+  <rect x="3" y="12" width="26" height="8" rx="4" fill="url(#grad1)" transform="rotate(-45 16 16)"/>
+  <!-- Top-right to bottom-left bar -->
+  <rect x="3" y="12" width="26" height="8" rx="4" fill="url(#grad2)" transform="rotate(45 16 16)"/>
+</svg>

@@ -1,0 +1,72 @@
+{
+  "name": "auris-cue-sheets",
+  "version": "0.3.0",
+  "description": "Automated cue sheet generator for Adobe Premiere Pro projects",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron": "electron .",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5200 && electron .\"",
+    "electron:build": "vite build && electron-builder",
+    "lint": "eslint src --ext .js,.jsx"
+  },
+  "build": {
+    "appId": "com.auris.cuesheets",
+    "productName": "Auris Cue Sheets",
+    "artifactName": "${productName}-v${version}-${arch}.${ext}",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "mac": {
+      "icon": "assets/icon.icns",
+      "target": "dmg"
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": "nsis"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "gittles17",
+      "repo": "AurisCueSheets"
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@phosphor-icons/react": "^2.1.10",
+    "@supabase/supabase-js": "^2.90.1",
+    "better-sqlite3": "^11.0.0",
+    "electron-updater": "^6.7.3",
+    "exceljs": "^4.4.0",
+    "fast-xml-parser": "^4.3.2",
+    "music-metadata": "^7.14.0",
+    "puppeteer-core": "^21.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tmp": "^0.2.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "vite": "^5.0.8",
+    "wait-on": "^7.2.0"
+  }
+}

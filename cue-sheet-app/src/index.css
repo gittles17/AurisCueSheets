@@ -1,0 +1,269 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Custom Properties - Auris Design System */
+:root {
+  /* Core backgrounds - Dark with subtle blue tint */
+  --bg-primary: #0a0d12;
+  --bg-secondary: #090b0f;
+  --bg-card: #08090d;
+  --bg-card-hover: #0c0e14;
+  --bg-surface: #090b0f;
+  
+  /* Borders */
+  --border-color: #262626;
+  --border-color-light: #333333;
+  
+  /* Text hierarchy */
+  --text-primary: #ffffff;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+  
+  /* Accent colors - Soft gradient palette */
+  --accent-green: #5BB09A;
+  --accent-green-dim: rgba(91, 176, 154, 0.15);
+  --accent-blue: #7AAED4;
+  --accent-blue-dim: rgba(122, 174, 212, 0.15);
+  --accent-purple: #9A85C9;
+  --accent-purple-dim: rgba(154, 133, 201, 0.15);
+  --accent-orange: #E09055;
+  --accent-orange-dim: rgba(224, 144, 85, 0.15);
+  --accent-red: #D4918A;
+  --accent-red-dim: rgba(212, 145, 138, 0.15);
+}
+
+/* Alpha Lyrae Font - Local */
+@font-face {
+  font-family: 'Alpha Lyrae';
+  src: url('/fonts/AlphaLyrae-Medium.woff2') format('woff2'),
+       url('/fonts/AlphaLyrae-Medium.woff') format('woff');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Base styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0a0d12;
+  color: #ffffff;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090b0f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444444;
+}
+
+/* Range slider thumb */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #737373;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: #a3a3a3;
+}
+
+/* Drag region for Electron */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Focus styles */
+input:focus,
+button:focus,
+select:focus {
+  outline: none;
+}
+
+/* Transitions */
+.transition-colors {
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Status colors */
+.status-active { background: var(--accent-green-dim); color: var(--accent-green); }
+.status-pending { background: var(--accent-orange-dim); color: var(--accent-orange); }
+.status-error { background: var(--accent-red-dim); color: var(--accent-red); }
+.status-info { background: var(--accent-blue-dim); color: var(--accent-blue); }
+
+/* Shimmer loading effect */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, #1a1a1a 0%, #252525 50%, #1a1a1a 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Typing indicator animation */
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+}
+
+.typing-dot {
+  animation: typing-bounce 1.4s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Toast notification animations */
+@keyframes slide-in-from-bottom {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation: slide-in-from-bottom 0.3s ease-out forwards;
+}
+
+/* Noise texture overlay */
+.noise-bg::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.08;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2' intercept='-0.5'/%3E%3CfeFuncG type='linear' slope='2' intercept='-0.5'/%3E%3CfeFuncB type='linear' slope='2.2' intercept='-0.4'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 350px 350px;
+  z-index: 0;
+}
+
+.noise-bg > *:not([data-modal-root]) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom component styles */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium text-sm cursor-pointer transition-all duration-150;
+  }
+  
+  .btn-primary {
+    @apply bg-white text-black hover:bg-gray-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-transparent text-white border border-auris-border hover:border-auris-border-light hover:bg-auris-card;
+  }
+  
+  .btn-ghost {
+    @apply bg-transparent text-auris-text-secondary px-3 py-2 hover:text-white hover:bg-auris-card;
+  }
+  
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded font-mono text-xs font-medium uppercase tracking-wide;
+  }
+  
+  .badge-green {
+    @apply bg-auris-green-dim text-auris-green;
+  }
+  
+  .badge-blue {
+    @apply bg-auris-blue-dim text-auris-blue;
+  }
+  
+  .badge-orange {
+    @apply bg-auris-orange-dim text-auris-orange;
+  }
+  
+  .badge-red {
+    @apply bg-auris-red-dim text-auris-red;
+  }
+  
+  .badge-purple {
+    @apply bg-auris-purple-dim text-auris-purple;
+  }
+  
+  .input {
+    @apply w-full bg-auris-bg border border-auris-border rounded-lg text-white px-3 py-2.5 text-sm transition-all duration-150;
+  }
+  
+  .input:focus {
+    @apply border-auris-blue/60 outline-none;
+  }
+  
+  .input::placeholder {
+    @apply text-auris-text-muted/60;
+  }
+  
+  .card {
+    @apply bg-auris-card border border-auris-border rounded-lg;
+  }
+  
+  .card-hover {
+    @apply hover:border-auris-border-light hover:bg-auris-card-hover transition-colors;
+  }
+}
+
+/* Excel-style cell cursor for cue sheet */
+.cursor-cell {
+  cursor: cell !important;
+}
+
+/* When editing a cell, use text cursor */
+.cursor-cell input,
+.cursor-cell textarea {
+  cursor: text !important;
+}
