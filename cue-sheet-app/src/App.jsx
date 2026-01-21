@@ -14,6 +14,7 @@ import SmartSuggestionPanel from './components/SmartSuggestionPanel';
 import AnnotationPopover from './components/AnnotationPopover';
 import TabBar from './components/TabBar';
 import GuidedTour, { shouldShowTour, SAMPLE_CUE_DATA } from './components/GuidedTour';
+import ImportWizard from './components/ImportWizard';
 import { useAuth } from './contexts/AuthContext';
 import { useSmartSuggestions } from './hooks/useSmartSuggestions';
 import { useCueSheet } from './hooks/useCueSheet';
@@ -81,6 +82,10 @@ function App() {
   
   // Feedback modal state
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  
+  // Import wizard state
+  const [showImportWizard, setShowImportWizard] = useState(false);
+  const [importWizardPath, setImportWizardPath] = useState(null);
   
   // Auto-update state
   const [updateAvailable, setUpdateAvailable] = useState(null);
@@ -290,11 +295,9 @@ function App() {
     let name = projectName;
     if (window.electronAPI) {
       cueSheetData = await window.electronAPI.getCueSheet(projectId);
-      // Get the parent folder name (the project name)
-      const parentFolderName = await window.electronAPI.getParentFolderName(projectId);
       if (cueSheetData) {
-        // Prefer parent folder name, then projectInfo.projectName, then cue sheet name
-        name = parentFolderName || cueSheetData.projectInfo?.projectName || cueSheetData.name || projectName || 'Untitled';
+        // Prefer cue sheet name, then projectInfo.projectName, then passed projectName
+        name = cueSheetData.name || cueSheetData.projectInfo?.projectName || projectName || 'Untitled';
       }
     }
     
@@ -653,21 +656,76 @@ function App() {
   const shouldAutoLookupRef = useRef(false);
   
   const handleFileDrop = useCallback(async (filePath) => {
-    const result = await loadProject(filePath);
+    // Open the import wizard for step-by-step review
+    setImportWizardPath(filePath);
+    setShowImportWizard(true);
+  }, []);
+  
+  // Handle import wizard completion
+  const handleImportWizardComplete = useCallback(async ({ cues: importedCues, projectInfo: wizardProjectInfo }) => {
+    // Save the path before clearing state
+    const filePath = importWizardPath;
     
-    // After loading, create a project entry
-    if (result && window.electronAPI) {
-      const importResult = await window.electronAPI.importPrproj(filePath, result, projectFolder);
+    setShowImportWizard(false);
+    setImportWizardPath(null);
+    
+    // Set cues from the wizard
+    setCues(importedCues.map((cue, idx) => ({
+      ...cue,
+      id: cue.id || idx + 1,
+      cueNumber: cue.cueNumber || idx + 1
+    })));
+    
+    // Set project info if available
+    if (wizardProjectInfo) {
+      setProjectInfo(prev => ({
+        ...prev,
+        projectName: wizardProjectInfo.projectName || prev.projectName || '',
+        spotTitle: wizardProjectInfo.spotTitle || prev.spotTitle || '',
+      }));
+    }
+    
+    // Create project entry in file tree and open as a tab
+    if (window.electronAPI && filePath) {
+      const importResult = await window.electronAPI.importPrproj(filePath, { cues: importedCues, projectInfo: wizardProjectInfo }, projectFolder);
       if (importResult?.cueSheetId) {
-        setActiveProjectId(importResult.cueSheetId);
+        const projectId = importResult.cueSheetId;
+        const projectName = wizardProjectInfo?.projectName || filePath.split('/').pop()?.replace('.prproj', '') || 'Untitled';
+        
+        // Create a tab for this imported project
+        const newTab = {
+          id: generateTabId(),
+          projectId,
+          name: projectName,
+          cues: importedCues.map((cue, idx) => ({
+            ...cue,
+            id: cue.id || idx + 1,
+            cueNumber: cue.cueNumber || idx + 1
+          })),
+          projectInfo: {
+            projectName: wizardProjectInfo?.projectName || '',
+            spotTitle: wizardProjectInfo?.spotTitle || '',
+          },
+          undoHistory: [],
+          historyIndex: -1,
+          selection: null,
+          scrollPosition: { x: 0, y: 0 },
+          isDirty: false
+        };
+        
+        setOpenTabs(prev => [...prev, newTab]);
+        setActiveTabId(newTab.id);
+        setActiveProjectId(projectId);
+        
         // Refresh projects list
         const projectsData = await window.electronAPI.getProjects();
         setProjects(projectsData || []);
       }
-      // Trigger auto-lookup after cues are loaded
-      shouldAutoLookupRef.current = true;
     }
-  }, [loadProject, projectFolder]);
+    
+    // Trigger auto-lookup
+    shouldAutoLookupRef.current = true;
+  }, [projectFolder, importWizardPath, setCues, setProjectInfo]);
   
   // Auto-lookup when file is loaded
   useEffect(() => {
@@ -762,12 +820,18 @@ function App() {
       await window.electronAPI.deleteItem(id);
       const projectsData = await window.electronAPI.getProjects();
       setProjects(projectsData || []);
-      if (activeProjectId === id) {
+      
+      // Close any tab associated with the deleted item
+      const tabToClose = openTabs.find(t => t.projectId === id);
+      if (tabToClose) {
+        closeTab(tabToClose.id);
+      } else if (activeProjectId === id) {
+        // Fallback: if no tab but it was active, clear state
         setActiveProjectId(null);
         setCues([]);
       }
     }
-  }, [activeProjectId, setCues]);
+  }, [activeProjectId, setCues, openTabs, closeTab]);
 
   const handleDuplicateItem = useCallback(async (id) => {
     if (window.electronAPI?.duplicateItem) {
@@ -1757,6 +1821,17 @@ function App() {
       <FeedbackModal 
         isOpen={showFeedbackModal} 
         onClose={() => setShowFeedbackModal(false)} 
+      />
+
+      {/* Import Wizard */}
+      <ImportWizard
+        isOpen={showImportWizard}
+        projectPath={importWizardPath}
+        onClose={() => {
+          setShowImportWizard(false);
+          setImportWizardPath(null);
+        }}
+        onComplete={handleImportWizardComplete}
       />
 
       {/* Annotation Popover */}

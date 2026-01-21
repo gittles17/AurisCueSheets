@@ -1,5 +1,15 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
-const { autoUpdater } = require('electron-updater');
+// Only load autoUpdater when packaged (not in dev mode)
+// Check if running in dev by looking at the executable path
+const isDevMode = !app || process.execPath.includes('electron') || process.env.ELECTRON_IS_DEV;
+let autoUpdater = null;
+if (!isDevMode && app) {
+  try {
+    autoUpdater = require('electron-updater').autoUpdater;
+  } catch (e) {
+    console.log('[AutoUpdater] Not available:', e.message);
+  }
+}
 const path = require('path');
 const fs = require('fs');
 const zlib = require('zlib');
@@ -28,16 +38,21 @@ const { patternEngine } = require('./pattern-engine');
 // Keep a global reference of the window object
 let mainWindow;
 
-const isDev = !app.isPackaged;
+// Use the same dev check we defined at the top
+const isDev = isDevMode;
 
 // Register custom protocol for bookmarklet data
 const PROTOCOL = 'auris';
-if (process.defaultApp) {
-  if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
-  }
-} else {
-  app.setAsDefaultProtocolClient(PROTOCOL);
+if (app && app.whenReady) {
+  app.whenReady().then(() => {
+    if (process.defaultApp) {
+      if (process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+      }
+    } else {
+      app.setAsDefaultProtocolClient(PROTOCOL);
+    }
+  });
 }
 
 // Store pending BMG data if app isn't ready yet
@@ -155,14 +170,50 @@ function createWindow() {
 app.whenReady().then(createWindow);
 
 // =============================================
-// Auto-Updater Configuration
+// Auto-Updater Configuration (only in production)
 // =============================================
-autoUpdater.autoDownload = true;
-autoUpdater.autoInstallOnAppQuit = true;
+if (autoUpdater) {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  // Auto-updater event handlers
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[AutoUpdater] Checking for update...');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('[AutoUpdater] Update available:', info.version);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-available', info);
+    }
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    console.log('[AutoUpdater] No update available, current version is latest');
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    console.log(`[AutoUpdater] Download progress: ${Math.round(progress.percent)}%`);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-download-progress', progress);
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('[AutoUpdater] Update downloaded:', info.version);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-downloaded', info);
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('[AutoUpdater] Error:', err.message);
+  });
+}
 
 // Check for updates after app launches (only in production)
 app.whenReady().then(() => {
-  if (!isDev) {
+  if (autoUpdater && !isDev) {
     // Check for updates after a short delay to let the app fully load
     setTimeout(() => {
       console.log('[AutoUpdater] Checking for updates...');
@@ -173,42 +224,11 @@ app.whenReady().then(() => {
   }
 });
 
-// Auto-updater event handlers
-autoUpdater.on('checking-for-update', () => {
-  console.log('[AutoUpdater] Checking for update...');
-});
-
-autoUpdater.on('update-available', (info) => {
-  console.log('[AutoUpdater] Update available:', info.version);
-  if (mainWindow) {
-    mainWindow.webContents.send('update-available', info);
-  }
-});
-
-autoUpdater.on('update-not-available', (info) => {
-  console.log('[AutoUpdater] No update available, current version is latest');
-});
-
-autoUpdater.on('download-progress', (progress) => {
-  console.log(`[AutoUpdater] Download progress: ${Math.round(progress.percent)}%`);
-  if (mainWindow) {
-    mainWindow.webContents.send('update-download-progress', progress);
-  }
-});
-
-autoUpdater.on('update-downloaded', (info) => {
-  console.log('[AutoUpdater] Update downloaded:', info.version);
-  if (mainWindow) {
-    mainWindow.webContents.send('update-downloaded', info);
-  }
-});
-
-autoUpdater.on('error', (err) => {
-  console.error('[AutoUpdater] Error:', err.message);
-});
-
 // IPC handlers for update actions
 ipcMain.handle('updater:check', async () => {
+  if (!autoUpdater) {
+    return { success: false, error: 'Auto-updater not available in dev mode' };
+  }
   try {
     const result = await autoUpdater.checkForUpdates();
     return { success: true, updateInfo: result?.updateInfo };
@@ -218,7 +238,9 @@ ipcMain.handle('updater:check', async () => {
 });
 
 ipcMain.handle('updater:install', () => {
-  autoUpdater.quitAndInstall(false, true);
+  if (autoUpdater) {
+    autoUpdater.quitAndInstall(false, true);
+  }
 });
 
 app.on('window-all-closed', () => {
@@ -258,6 +280,60 @@ ipcMain.handle('prproj:parse', async (event, filePath) => {
     const result = await parsePrprojFile(filePath);
     return { success: true, data: result };
   } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Import Wizard - Parse project with full pipeline (all 8 steps)
+// Includes: XML parsing, categorization, durations, stem grouping,
+// file metadata extraction, learned DB matching, pattern fills, use type detection
+ipcMain.handle('wizard:parseProject', async (event, filePath) => {
+  try {
+    const importPipeline = require('./import-pipeline');
+    
+    console.log('[Wizard] Running full pipeline for:', filePath);
+    
+    // Progress callback to send updates to renderer
+    const onProgress = (progressData) => {
+      // Send progress to the renderer process
+      if (event.sender && !event.sender.isDestroyed()) {
+        event.sender.send('wizard:progress', progressData);
+      }
+    };
+    
+    // Run the complete 8-step pipeline with progress reporting
+    const pipelineResult = await importPipeline.runFullPipeline(filePath, { 
+      fps: 23.976,
+      onProgress 
+    });
+    
+    console.log(`[Wizard] Pipeline completed in ${pipelineResult.totalElapsedMs}ms`);
+    console.log(`[Wizard] Final: ${pipelineResult.result.length} cues`);
+    console.log(`[Wizard] With composer: ${pipelineResult.finalSummary.withComposer}, With publisher: ${pipelineResult.finalSummary.withPublisher}`);
+    
+    return {
+      success: true,
+      projectName: pipelineResult.projectName,
+      spotTitle: pipelineResult.spotTitle,
+      rawClips: pipelineResult.result, // Use final result for all steps (has all data)
+      categorizedClips: pipelineResult.result,
+      groupedClips: pipelineResult.result,
+      summary: {
+        rawCount: pipelineResult.summaries[0]?.outputCount || pipelineResult.result.length,
+        categorizedCount: pipelineResult.summaries[1]?.outputCount || pipelineResult.result.length,
+        groupedCount: pipelineResult.result.length,
+        mainCount: pipelineResult.finalSummary.mainCues,
+        sfxCount: pipelineResult.finalSummary.sfxCues,
+        withComposer: pipelineResult.finalSummary.withComposer,
+        withPublisher: pipelineResult.finalSummary.withPublisher,
+        complete: pipelineResult.finalSummary.complete,
+        processingTimeMs: pipelineResult.totalElapsedMs,
+        opusEnabled: false,
+        opusUsed: false,
+      }
+    };
+  } catch (error) {
+    console.error('[Wizard] Parse error:', error);
     return { success: false, error: error.message };
   }
 });

@@ -7,6 +7,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Project parsing
   parsePrproj: (filePath) => ipcRenderer.invoke('prproj:parse', filePath),
+  parseProjectForWizard: (filePath) => ipcRenderer.invoke('wizard:parseProject', filePath),
+  
+  // Wizard progress events
+  onWizardProgress: (callback) => {
+    ipcRenderer.on('wizard:progress', (event, data) => callback(data));
+  },
+  removeWizardProgressListener: () => {
+    ipcRenderer.removeAllListeners('wizard:progress');
+  },
   
   // Excel export
   exportExcel: (data) => ipcRenderer.invoke('excel:export', data),

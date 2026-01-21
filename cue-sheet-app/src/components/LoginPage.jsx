@@ -9,11 +9,13 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.3';
+const VERSION = 'v0.4';
 const WHATS_NEW = [
-  { title: 'Import Wizard', description: 'New guided import workflow for CSV, Excel, and more' },
+  { title: 'Import Wizard', description: 'Step-by-step guided import for Premiere Pro projects' },
+  { title: 'Import Progress', description: 'Real-time 8-step progress indicator for large file imports' },
+  { title: 'AI Classification', description: 'Hybrid AI with confidence scoring for track categorization' },
+  { title: 'Stem Grouping', description: 'Auto-detect and group stem files under parent tracks' },
   { title: 'Auto-Update System', description: 'App automatically downloads and installs updates' },
-  { title: 'Update Progress', description: 'Visual progress bar with download speed and status' },
 ];
 
 export default function LoginPage({ onLogin }) {

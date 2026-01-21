@@ -14,7 +14,9 @@ const fs = require('fs');
 // Try to load from .env file if it exists
 function loadEnvFile() {
   try {
-    const envPath = app.isPackaged 
+    // Check if app is available and isPackaged is defined
+    const isPackaged = app && typeof app.isPackaged !== 'undefined' ? app.isPackaged : false;
+    const envPath = isPackaged 
       ? path.join(process.resourcesPath, '.env')
       : path.join(__dirname, '..', '.env');
     

@@ -68,14 +68,38 @@ async function parseProjectXML(filePath) {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     
+    console.log('[ImportPipeline] parseProjectXML called with:', filePath);
+    
+    // Handle relative paths or just filenames - try common locations
+    let resolvedPath = filePath;
+    if (!path.isAbsolute(filePath)) {
+      console.log('[ImportPipeline] Path is not absolute, searching common locations...');
+      const home = process.env.HOME || '/Users/' + process.env.USER;
+      const possiblePaths = [
+        filePath,
+        path.join(home, 'Desktop', filePath),
+        path.join(home, 'Documents', filePath),
+        path.join(home, 'Desktop/AurisCueSheets', filePath),
+      ];
+      
+      for (const tryPath of possiblePaths) {
+        console.log('[ImportPipeline] Trying:', tryPath);
+        if (fs.existsSync(tryPath)) {
+          resolvedPath = tryPath;
+          console.log('[ImportPipeline] Found file at:', resolvedPath);
+          break;
+        }
+      }
+    }
+    
     // Verify file exists
-    if (!fs.existsSync(filePath)) {
+    if (!fs.existsSync(resolvedPath)) {
       reject(new Error(`File not found: ${filePath}`));
       return;
     }
     
     // Read the gzip-compressed file
-    const fileBuffer = fs.readFileSync(filePath);
+    const fileBuffer = fs.readFileSync(resolvedPath);
     
     zlib.gunzip(fileBuffer, async (err, decompressed) => {
       if (err) {
@@ -1421,43 +1445,95 @@ async function detectUseTypes(clips) {
 }
 
 // ============================================================================
+// Pipeline step definitions for progress reporting
+// ============================================================================
+const PIPELINE_STEPS = [
+  { id: 1, name: 'Parsing XML', description: 'Reading project file...' },
+  { id: 2, name: 'Categorizing', description: 'Classifying clips as Main/SFX/Stem...' },
+  { id: 3, name: 'Calculating Durations', description: 'Converting timeline to durations...' },
+  { id: 4, name: 'Grouping Stems', description: 'Linking stems to parent tracks...' },
+  { id: 5, name: 'Reading Metadata', description: 'Extracting file metadata...' },
+  { id: 6, name: 'Matching Database', description: 'Finding matches in learned database...' },
+  { id: 7, name: 'Applying Patterns', description: 'Using learned patterns...' },
+  { id: 8, name: 'Detecting Use Types', description: 'Determining BI/BV/VI usage...' },
+];
+
+// ============================================================================
 // FINAL: Run Full Pipeline - Execute all steps in sequence
 // ============================================================================
 async function runFullPipeline(filePath, options = {}) {
   const startTime = Date.now();
   const summaries = [];
+  const onProgress = options.onProgress || (() => {}); // Progress callback
+  const totalSteps = PIPELINE_STEPS.length;
+  
+  // Helper to report progress
+  // When starting a step: progress = (stepNum - 1) / totalSteps (0% at start)
+  // When completing a step: progress = stepNum / totalSteps (100% at end)
+  const reportProgress = (stepNum, matches = 0, additional = {}) => {
+    const step = PIPELINE_STEPS[stepNum - 1];
+    const isComplete = additional.complete === true;
+    const progressValue = isComplete 
+      ? Math.round((stepNum / totalSteps) * 100)
+      : Math.round(((stepNum - 1) / totalSteps) * 100);
+    onProgress({
+      step: stepNum,
+      totalSteps,
+      stepName: step.name,
+      description: step.description,
+      progress: progressValue,
+      matches,
+      ...additional
+    });
+  };
   
   // Step 1: Parse XML
+  reportProgress(1);
   const step1 = await parseProjectXML(filePath);
   summaries.push(step1.summary);
+  reportProgress(1, step1.result.length, { complete: true });
   
   // Step 2: Categorize
+  reportProgress(2);
   const step2 = categorizeCues(step1.result);
   summaries.push(step2.summary);
+  reportProgress(2, step2.result.length, { complete: true });
   
   // Step 3: Durations
+  reportProgress(3);
   const step3 = calculateDurations(step2.result, options.fps || 23.976);
   summaries.push(step3.summary);
+  reportProgress(3, step3.result.length, { complete: true });
   
   // Step 4: Group Stems
+  reportProgress(4);
   const step4 = groupStems(step3.result);
   summaries.push(step4.summary);
+  reportProgress(4, step4.result.length, { complete: true });
   
   // Step 5: File Metadata
+  reportProgress(5);
   const step5 = await enrichWithMetadata(step4.result, step1.filePathsMap);
   summaries.push(step5.summary);
+  reportProgress(5, step5.summary.enrichedCount || 0, { complete: true });
   
   // Step 6: Learned DB
+  reportProgress(6);
   const step6 = await matchLearnedDB(step5.result);
   summaries.push(step6.summary);
+  reportProgress(6, step6.summary.matchedCount || 0, { complete: true });
   
   // Step 7: Patterns
+  reportProgress(7);
   const step7 = await applyPatterns(step6.result);
   summaries.push(step7.summary);
+  reportProgress(7, step7.summary.appliedCount || 0, { complete: true });
   
   // Step 8: Use Types
+  reportProgress(8);
   const step8 = await detectUseTypes(step7.result);
   summaries.push(step8.summary);
+  reportProgress(8, step8.result.length, { complete: true, done: true });
   
   const totalElapsed = Date.now() - startTime;
   
@@ -1690,5 +1766,6 @@ module.exports = {
   // Constants (for testing)
   SFX_PATTERNS,
   AUDIO_EXTENSIONS,
-  TICKS_PER_SECOND
+  TICKS_PER_SECOND,
+  PIPELINE_STEPS
 };

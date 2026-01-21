@@ -4,12 +4,24 @@ import {
   FileXls, FilePdf, Gear, CircleNotch, File, FolderOpen, 
   FloppyDisk, Circle, Export, User, SignOut, Crown, Key, ShareNetwork,
   Info, Sparkle, Database, Brain, CheckCircle, X, ArrowUUpLeft, ArrowUUpRight,
-  Compass, ChatCircle
+  Compass, ChatCircle, TreeStructure
 } from '@phosphor-icons/react';
 import { useAuth } from '../contexts/AuthContext';
 
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
+  {
+    version: 'v0.4',
+    date: 'January 2026',
+    features: [
+      { title: 'Import Wizard', description: 'Step-by-step guided import for Premiere Pro projects. Review clips, categorize tracks, and group stems with confidence scoring.', icon: Compass },
+      { title: 'Import Progress', description: 'Real-time progress indicator shows each of the 8 pipeline steps during import. No more spinning beach ball on large files.', icon: CircleNotch },
+      { title: 'AI-Assisted Classification', description: 'Hybrid AI approach uses fast pattern matching with targeted Opus AI for ambiguous clips. See confidence badges on each classification.', icon: Sparkle },
+      { title: 'Stem Grouping', description: 'Automatically detects and groups stem files under their parent tracks. Merge or ungroup stems as needed.', icon: TreeStructure },
+      { title: 'Learning System', description: 'The wizard learns from your corrections to improve future imports. Patterns are saved for faster, more accurate processing.', icon: Brain },
+      { title: 'Auto-Update System', description: 'App automatically checks for and downloads updates in the background with visual progress bar.', icon: CheckCircle },
+    ]
+  },
   {
     version: 'v0.3',
     date: 'January 2026',
