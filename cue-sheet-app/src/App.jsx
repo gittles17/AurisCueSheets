@@ -85,6 +85,7 @@ function App() {
   // Auto-update state
   const [updateAvailable, setUpdateAvailable] = useState(null);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(null);
   
   // Auris Chat state
   const [showAurisChat, setShowAurisChat] = useState(false);
@@ -464,9 +465,15 @@ function App() {
       setUpdateAvailable(info);
     });
     
+    window.electronAPI.onUpdateDownloadProgress?.((progress) => {
+      console.log('[App] Update download progress:', Math.round(progress.percent) + '%');
+      setUpdateProgress(progress);
+    });
+    
     window.electronAPI.onUpdateDownloaded((info) => {
       console.log('[App] Update downloaded:', info.version);
       setUpdateDownloaded(true);
+      setUpdateProgress(null);
     });
     
     return () => {
@@ -1819,7 +1826,23 @@ function App() {
         </div>
       )}
 
-      {/* Update Available Notification */}
+      {/* Update Downloading Notification */}
+      {updateAvailable && !updateDownloaded && (
+        <div 
+          data-modal-root
+          className="fixed bottom-4 right-4 z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl bg-auris-card border border-auris-purple/50"
+        >
+          <CircleNotch size={20} className="text-auris-purple flex-shrink-0 animate-spin" />
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-auris-text">Downloading Update</span>
+            <span className="text-xs text-auris-text-muted">
+              v{updateAvailable.version} {updateProgress ? `- ${Math.round(updateProgress.percent)}%` : ''}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Update Ready Notification */}
       {updateDownloaded && updateAvailable && (
         <div 
           data-modal-root
