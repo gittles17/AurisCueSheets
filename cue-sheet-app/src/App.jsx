@@ -1830,15 +1830,34 @@ function App() {
       {updateAvailable && !updateDownloaded && (
         <div 
           data-modal-root
-          className="fixed bottom-4 right-4 z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl bg-auris-card border border-auris-purple/50"
+          className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 px-4 py-3 rounded-xl shadow-xl bg-auris-card border border-auris-purple/50 min-w-[280px]"
         >
-          <CircleNotch size={20} className="text-auris-purple flex-shrink-0 animate-spin" />
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-auris-text">Downloading Update</span>
-            <span className="text-xs text-auris-text-muted">
-              v{updateAvailable.version} {updateProgress ? `- ${Math.round(updateProgress.percent)}%` : ''}
+          <div className="flex items-center gap-3">
+            <CircleNotch size={20} className="text-auris-purple flex-shrink-0 animate-spin" />
+            <div className="flex flex-col flex-1">
+              <span className="text-sm font-medium text-auris-text">Downloading Update v{updateAvailable.version}</span>
+              <span className="text-xs text-auris-text-muted">
+                {updateProgress 
+                  ? `${(updateProgress.transferred / 1024 / 1024).toFixed(1)} MB / ${(updateProgress.total / 1024 / 1024).toFixed(1)} MB`
+                  : 'Starting download...'}
+              </span>
+            </div>
+            <span className="text-sm font-semibold text-auris-purple">
+              {updateProgress ? `${Math.round(updateProgress.percent)}%` : '0%'}
             </span>
           </div>
+          {/* Progress Bar */}
+          <div className="w-full h-2 bg-auris-bg rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-auris-purple transition-all duration-300 ease-out rounded-full"
+              style={{ width: `${updateProgress?.percent || 0}%` }}
+            />
+          </div>
+          {updateProgress?.bytesPerSecond > 0 && (
+            <span className="text-xs text-auris-text-muted text-right">
+              {(updateProgress.bytesPerSecond / 1024 / 1024).toFixed(1)} MB/s
+            </span>
+          )}
         </div>
       )}
 
