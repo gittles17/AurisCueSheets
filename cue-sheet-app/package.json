@@ -1,6 +1,6 @@
 {
   "name": "auris-cue-sheets",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Automated cue sheet generator for Adobe Premiere Pro projects",
   "main": "electron/main.js",
   "scripts": {
