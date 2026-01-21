@@ -9,11 +9,11 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.03';
+const VERSION = 'v0.3';
 const WHATS_NEW = [
-  { title: 'Cue Sheet Scrolling', description: 'Scroll through large cue sheets with ease' },
-  { title: 'Instant Account Access', description: 'Sign in immediately after creating an account' },
-  { title: 'Send Feedback', description: 'Submit bugs, features, and feedback from File menu' },
+  { title: 'Import Wizard', description: 'New guided import workflow for CSV, Excel, and more' },
+  { title: 'Auto-Update System', description: 'App automatically downloads and installs updates' },
+  { title: 'Update Progress', description: 'Visual progress bar with download speed and status' },
 ];
 
 export default function LoginPage({ onLogin }) {

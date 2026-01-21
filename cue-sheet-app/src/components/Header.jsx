@@ -11,7 +11,16 @@ import { useAuth } from '../contexts/AuthContext';
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
   {
-    version: 'v0.03',
+    version: 'v0.3',
+    date: 'January 2026',
+    features: [
+      { title: 'Import Wizard', description: 'New guided import workflow for bringing in data from CSV, Excel, and other sources with intelligent column mapping.', icon: Compass },
+      { title: 'Auto-Update System', description: 'App now automatically checks for and downloads updates in the background. Get the latest features without manual downloads.', icon: CheckCircle },
+      { title: 'Update Progress Indicator', description: 'Visual progress bar showing download status, speed (MB/s), and file size when updates are available.', icon: CheckCircle },
+    ]
+  },
+  {
+    version: 'v0.2',
     date: 'January 2026',
     features: [
       { title: 'Cue Sheet Scrolling', description: 'Fixed scrolling for large cue sheets. Now you can scroll through projects with many tracks without any issues.', icon: CheckCircle },
@@ -20,7 +29,7 @@ const VERSION_HISTORY = [
     ]
   },
   {
-    version: 'v0.02',
+    version: 'v0.1',
     date: 'January 2026',
     features: [
       { title: 'Adaptive AI Learning', description: 'Auris learns from your cue sheet work and auto-fills fields based on patterns. The more you use it, the smarter it gets.', icon: Brain },
