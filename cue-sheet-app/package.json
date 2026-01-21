@@ -9,8 +9,9 @@
     "preview": "vite preview",
     "electron": "electron .",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5200 && electron .\"",
-    "electron:build": "vite build && electron-builder",
-    "lint": "eslint src --ext .js,.jsx"
+    "electron:build": "vite build && electron-builder --publish=never",
+    "lint": "eslint src --ext .js,.jsx",
+    "release": "node scripts/release.js"
   },
   "build": {
     "appId": "com.auris.cuesheets",
