@@ -9,13 +9,11 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.4';
+const VERSION = 'v0.5';
 const WHATS_NEW = [
-  { title: 'Import Wizard', description: 'Step-by-step guided import for Premiere Pro projects' },
-  { title: 'Import Progress', description: 'Real-time 8-step progress indicator for large file imports' },
-  { title: 'AI Classification', description: 'Hybrid AI with confidence scoring for track categorization' },
-  { title: 'Stem Grouping', description: 'Auto-detect and group stem files under parent tracks' },
-  { title: 'Auto-Update System', description: 'App automatically downloads and installs updates' },
+  { title: 'Smart Fill in Sidebar - AI field fill moved to Actions panel', description: 'Smart Fill in Sidebar - AI field fill moved to Actions panel' },
+  { title: 'Improved Cell Selection - click to select, double-click to edit', description: 'Improved Cell Selection - click to select, double-click to edit' },
+  { title: 'Multi-cell Delete - Delete key clears all selected cells', description: 'Multi-cell Delete - Delete key clears all selected cells' },
 ];
 
 export default function LoginPage({ onLogin }) {

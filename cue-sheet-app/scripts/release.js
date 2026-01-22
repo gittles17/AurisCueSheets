@@ -8,10 +8,18 @@
  * This script will:
  * 1. Update version in package.json
  * 2. Update version info in Header.jsx, LoginPage.jsx, SettingsModal.jsx
- * 3. Build the app
+ * 3. Build the app (with code signing and notarization if credentials are set)
  * 4. Generate latest-mac.yml
  * 5. Commit, tag, and push to GitHub
  * 6. Create GitHub release and upload assets
+ * 
+ * Required Environment Variables for Code Signing:
+ *   APPLE_ID          - Your Apple ID email
+ *   APPLE_APP_PASSWORD - App-specific password from appleid.apple.com
+ *   APPLE_TEAM_ID     - Your Apple Developer Team ID
+ * 
+ * The app will be signed with your Developer ID Application certificate
+ * from Keychain (installed automatically when you download from Apple Developer portal)
  */
 
 const fs = require('fs');
@@ -23,6 +31,12 @@ const crypto = require('crypto');
 const GITHUB_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
 const REPO_OWNER = 'gittles17';
 const REPO_NAME = 'AurisCueSheets';
+
+// Apple signing credentials (optional - will skip signing if not set)
+const APPLE_ID = process.env.APPLE_ID;
+const APPLE_APP_PASSWORD = process.env.APPLE_APP_PASSWORD;
+const APPLE_TEAM_ID = process.env.APPLE_TEAM_ID;
+const IS_SIGNED_BUILD = APPLE_ID && APPLE_APP_PASSWORD && APPLE_TEAM_ID;
 
 // Paths
 const ROOT_DIR = path.resolve(__dirname, '..');
@@ -127,6 +141,15 @@ function updateSettingsModalJsx(version) {
 
 function buildApp() {
   console.log('\n🔨 Building app...');
+  
+  if (IS_SIGNED_BUILD) {
+    console.log('   Code signing enabled (Apple credentials detected)');
+    console.log(`   Apple ID: ${APPLE_ID}`);
+    console.log(`   Team ID: ${APPLE_TEAM_ID}`);
+  } else {
+    console.log('   ⚠️  Code signing DISABLED (set APPLE_ID, APPLE_APP_PASSWORD, APPLE_TEAM_ID to enable)');
+  }
+  
   run('npm run build');
   run('npx electron-builder --publish=never');
 }
@@ -134,31 +157,44 @@ function buildApp() {
 function generateLatestMacYml(version) {
   console.log('\n📄 Generating latest-mac.yml...');
   
-  const dmgPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-arm64.dmg`);
+  const arm64DmgPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-arm64.dmg`);
+  const x64DmgPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-x64.dmg`);
   
-  if (!fs.existsSync(dmgPath)) {
-    throw new Error(`DMG not found: ${dmgPath}`);
+  // Check for ARM64 DMG (Apple Silicon)
+  if (!fs.existsSync(arm64DmgPath)) {
+    throw new Error(`ARM64 DMG not found: ${arm64DmgPath}`);
   }
   
-  // Get file size
-  const stats = fs.statSync(dmgPath);
-  const size = stats.size;
+  const arm64Stats = fs.statSync(arm64DmgPath);
+  const arm64Sha512 = run(`shasum -a 512 "${arm64DmgPath}" | awk '{print $1}' | xxd -r -p | base64`, { silent: true }).trim();
   
-  // Generate SHA512
-  const sha512 = run(`shasum -a 512 "${dmgPath}" | awk '{print $1}' | xxd -r -p | base64`, { silent: true }).trim();
-  
-  const yml = `version: ${version}.0
+  let yml = `version: ${version}.0
 files:
   - url: Auris-Cue-Sheets-v${version}.0-arm64.dmg
-    sha512: ${sha512}
-    size: ${size}
+    sha512: ${arm64Sha512}
+    size: ${arm64Stats.size}
+    arch: arm64`;
+  
+  // Check for x64 DMG (Intel)
+  if (fs.existsSync(x64DmgPath)) {
+    const x64Stats = fs.statSync(x64DmgPath);
+    const x64Sha512 = run(`shasum -a 512 "${x64DmgPath}" | awk '{print $1}' | xxd -r -p | base64`, { silent: true }).trim();
+    
+    yml += `
+  - url: Auris-Cue-Sheets-v${version}.0-x64.dmg
+    sha512: ${x64Sha512}
+    size: ${x64Stats.size}
+    arch: x64`;
+  }
+  
+  yml += `
 path: Auris-Cue-Sheets-v${version}.0-arm64.dmg
-sha512: ${sha512}
+sha512: ${arm64Sha512}
 releaseDate: '${new Date().toISOString()}'
 `;
   
   writeFile(path.join(DIST_DIR, 'latest-mac.yml'), yml);
-  return { sha512, size };
+  return { sha512: arm64Sha512, size: arm64Stats.size };
 }
 
 function gitCommitAndTag(version) {
@@ -180,7 +216,13 @@ async function createGitHubRelease(version, features) {
     return null;
   }
   
+  const signedNote = IS_SIGNED_BUILD 
+    ? '✅ This release is code-signed and notarized by Apple for your security.'
+    : '⚠️ This release is unsigned. You may need to right-click and select "Open" on first launch.';
+  
   const body = `## Auris Cue Sheets v${version}
+
+${signedNote}
 
 ### New Features
 - **${features[0] || 'New Features'}**
@@ -188,9 +230,9 @@ async function createGitHubRelease(version, features) {
 - **${features[2] || 'Bug Fixes'}**
 
 ### Installation
-1. Download the DMG file below
+1. Download the DMG file below (ARM64 for Apple Silicon Macs, x64 for Intel Macs)
 2. Open the DMG and drag Auris Cue Sheets to Applications
-3. Right-click the app and select Open (required for first launch on macOS)`;
+3. Launch the app from Applications`;
 
   const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases`, {
     method: 'POST',
@@ -241,8 +283,16 @@ Usage: node scripts/release.js <version> "<feature1>" "<feature2>" "<feature3>"
 Example:
   node scripts/release.js 0.4 "Import Wizard" "Auto-Update System" "Performance improvements"
 
-Environment:
-  GH_TOKEN or GITHUB_TOKEN - GitHub personal access token for creating releases
+Environment Variables:
+  GH_TOKEN or GITHUB_TOKEN  - GitHub personal access token for creating releases
+  
+  For code signing and notarization (optional but recommended):
+  APPLE_ID                  - Your Apple ID email
+  APPLE_APP_PASSWORD        - App-specific password from appleid.apple.com
+  APPLE_TEAM_ID             - Your Apple Developer Team ID (10-character string)
+  
+  Note: You also need a "Developer ID Application" certificate installed in Keychain.
+        Download it from developer.apple.com > Certificates, Identifiers & Profiles
 `);
     process.exit(1);
   }
@@ -252,6 +302,7 @@ Environment:
   
   console.log(`\n🎉 Releasing Auris Cue Sheets v${version}`);
   console.log(`   Features: ${features.join(', ') || '(none specified)'}`);
+  console.log(`   Code Signing: ${IS_SIGNED_BUILD ? '✅ Enabled' : '❌ Disabled (set Apple credentials to enable)'}`);
   
   try {
     // 1. Update version files
@@ -275,10 +326,18 @@ Environment:
     if (releaseId) {
       // 6. Upload assets
       console.log('\n📎 Uploading release assets...');
-      const dmgPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-arm64.dmg`);
+      const arm64DmgPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-arm64.dmg`);
+      const x64DmgPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-x64.dmg`);
       const ymlPath = path.join(DIST_DIR, 'latest-mac.yml');
       
-      await uploadReleaseAsset(releaseId, dmgPath, `Auris-Cue-Sheets-v${version}.0-arm64.dmg`);
+      // Upload ARM64 DMG (Apple Silicon)
+      await uploadReleaseAsset(releaseId, arm64DmgPath, `Auris-Cue-Sheets-v${version}.0-arm64.dmg`);
+      
+      // Upload x64 DMG (Intel) if it exists
+      if (fs.existsSync(x64DmgPath)) {
+        await uploadReleaseAsset(releaseId, x64DmgPath, `Auris-Cue-Sheets-v${version}.0-x64.dmg`);
+      }
+      
       await uploadReleaseAsset(releaseId, ymlPath, 'latest-mac.yml');
     }
     

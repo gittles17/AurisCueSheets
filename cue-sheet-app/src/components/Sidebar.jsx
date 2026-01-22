@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { CircleNotch, CheckCircle, Sparkle, CaretDown, Funnel } from '@phosphor-icons/react';
+import { CircleNotch, CheckCircle, Sparkle, CaretDown, Funnel, Brain, X } from '@phosphor-icons/react';
 
 /**
  * Library definitions for filtering tracks
@@ -97,10 +97,57 @@ function detectLibrary(track) {
   return null;
 }
 
-function Sidebar({ projectInfo, setProjectInfo, cueCount, completedCount, isLookingUp, pendingTracks = [], onOpenBrowser, onOpenBrowserBatch }) {
+function Sidebar({ 
+  projectInfo, 
+  setProjectInfo, 
+  cueCount, 
+  completedCount, 
+  isLookingUp, 
+  pendingTracks = [], 
+  onOpenBrowser, 
+  onOpenBrowserBatch,
+  // Smart fill props
+  aiAssistEnabled = false,
+  smartSuggestions = null,
+  isLoadingSuggestions = false,
+  onSelectField = null,
+  onApplySuggestion = null,
+  onApplyCustomValue = null,
+  onDismissSuggestions = null
+}) {
   const [copiedTrack, setCopiedTrack] = useState(null);
   const [selectedLibrary, setSelectedLibrary] = useState('all');
   const [showLibraryDropdown, setShowLibraryDropdown] = useState(false);
+  
+  // Smart fill local state
+  const [customValue, setCustomValue] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  // Handle apply - always remember pattern automatically
+  const handleApply = useCallback(async (option) => {
+    const success = await onApplySuggestion?.(option, { applyToSimilar: false, rememberPattern: true });
+    if (success) {
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        onDismissSuggestions?.();
+      }, 600);
+    }
+  }, [onApplySuggestion, onDismissSuggestions]);
+
+  // Handle custom value apply - always remember pattern
+  const handleApplyCustom = useCallback(async () => {
+    if (!customValue.trim()) return;
+    const success = await onApplyCustomValue?.(customValue, { applyToSimilar: false, rememberPattern: true });
+    if (success) {
+      setShowSuccess(true);
+      setCustomValue('');
+      setTimeout(() => {
+        setShowSuccess(false);
+        onDismissSuggestions?.();
+      }, 600);
+    }
+  }, [customValue, onApplyCustomValue, onDismissSuggestions]);
   
   // Detect library for each pending track and organize them
   const { tracksWithLibrary, availableLibraries, filteredTracks } = useMemo(() => {
@@ -217,6 +264,146 @@ function Sidebar({ projectInfo, setProjectInfo, cueCount, completedCount, isLook
         <h2 className="text-xs font-semibold uppercase tracking-wider text-auris-text-muted mb-3">
           Actions
         </h2>
+        
+        {/* Smart Fill Panel - shows when AI assist is enabled and cells are selected */}
+        {aiAssistEnabled && smartSuggestions && (
+          <div className="mb-4 bg-auris-card border border-auris-border rounded-lg overflow-hidden">
+            {/* Success state */}
+            {showSuccess ? (
+              <div className="p-4 flex flex-col items-center justify-center gap-2">
+                <CheckCircle size={32} className="text-auris-green" weight="fill" />
+                <span className="text-sm text-auris-green font-medium">Applied successfully!</span>
+              </div>
+            ) : smartSuggestions.multipleFields ? (
+              /* Multiple fields missing - show field selector */
+              <>
+                <div className="px-3 py-2.5 border-b border-auris-border flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Brain size={16} className="text-auris-blue" />
+                    <span className="text-sm font-medium text-auris-text">
+                      {smartSuggestions.trackCount} track{smartSuggestions.trackCount > 1 ? 's' : ''} selected
+                    </span>
+                  </div>
+                  <button
+                    onClick={onDismissSuggestions}
+                    className="p-1 rounded hover:bg-auris-bg transition-colors"
+                  >
+                    <X size={14} className="text-auris-text-muted" />
+                  </button>
+                </div>
+                <div className="p-3">
+                  <p className="text-xs text-auris-text-muted mb-2">Choose a field to fill:</p>
+                  <div className="space-y-1.5">
+                    {smartSuggestions.missingFields.map(({ field, count }) => (
+                      <button
+                        key={field}
+                        onClick={() => onSelectField?.(field)}
+                        className="w-full flex items-center justify-between px-3 py-2 bg-auris-bg border border-auris-border rounded-lg hover:border-auris-blue/50 hover:bg-auris-blue/5 transition-all group"
+                      >
+                        <span className="text-sm text-auris-text capitalize">{field}</span>
+                        <span className="text-xs text-auris-text-muted group-hover:text-auris-blue">
+                          {count} empty
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Single field mode - simplified suggestions */
+              <>
+                {/* Header */}
+                <div className="px-3 py-2.5 border-b border-auris-border flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-medium text-auris-text capitalize">
+                      Fill {smartSuggestions.field}
+                    </span>
+                    <span className="text-xs text-auris-text-muted ml-2">
+                      {smartSuggestions.trackCount} track{smartSuggestions.trackCount > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <button
+                    onClick={onDismissSuggestions}
+                    className="p-1 rounded hover:bg-auris-bg transition-colors"
+                  >
+                    <X size={14} className="text-auris-text-muted" />
+                  </button>
+                </div>
+
+                {/* Loading state */}
+                {isLoadingSuggestions && (
+                  <div className="p-4 flex items-center justify-center gap-2">
+                    <CircleNotch size={18} className="animate-spin text-auris-blue" />
+                    <span className="text-xs text-auris-text-muted">Finding suggestions...</span>
+                  </div>
+                )}
+
+                {/* Suggestions - click to apply immediately */}
+                {!isLoadingSuggestions && (
+                  <div className="p-2 space-y-1.5">
+                    {/* Top suggestion - prominent */}
+                    {smartSuggestions.topSuggestion && (
+                      <button
+                        onClick={() => handleApply(smartSuggestions.topSuggestion)}
+                        className="w-full flex items-center justify-between px-3 py-2.5 bg-auris-blue/10 border border-auris-blue/30 rounded-lg hover:bg-auris-blue/20 transition-all group text-left"
+                      >
+                        <span className="text-sm font-medium text-auris-text truncate">
+                          {smartSuggestions.topSuggestion.value}
+                        </span>
+                        <span className="text-xs text-auris-blue opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          Click to apply
+                        </span>
+                      </button>
+                    )}
+                    
+                    {/* Alternative suggestions - smaller, also one-click */}
+                    {(smartSuggestions.options || []).slice(1, 4).filter(o => o.value && o.value !== '__CUSTOM__').map((option) => (
+                      <button
+                        key={option.id}
+                        onClick={() => handleApply(option)}
+                        className="w-full flex items-center px-3 py-2 bg-auris-bg border border-auris-border rounded-lg hover:border-auris-blue/30 hover:bg-auris-blue/5 transition-all text-left"
+                      >
+                        <span className="text-sm text-auris-text-secondary truncate">
+                          {option.value}
+                        </span>
+                      </button>
+                    ))}
+
+                    {/* No suggestions */}
+                    {!smartSuggestions.topSuggestion && (
+                      <div className="px-3 py-2 text-xs text-auris-text-muted">
+                        No suggestions found. Type your own below.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Custom value - simple input */}
+                {!isLoadingSuggestions && (
+                  <div className="px-3 py-2.5 border-t border-auris-border">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={customValue}
+                        onChange={(e) => setCustomValue(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleApplyCustom()}
+                        placeholder="Type your own..."
+                        className="flex-1 bg-auris-bg border border-auris-border rounded-lg px-3 py-2 text-sm text-auris-text placeholder:text-auris-text-muted/50 focus:outline-none focus:border-auris-blue min-w-0"
+                      />
+                      <button
+                        onClick={handleApplyCustom}
+                        disabled={!customValue.trim()}
+                        className="px-3 py-2 text-sm font-medium bg-auris-card border border-auris-border rounded-lg text-auris-text hover:bg-auris-bg hover:border-auris-blue/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
         
         {/* Smart Lookup Section with Library Filter */}
         {pendingTracks.length > 0 && (

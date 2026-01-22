@@ -2,6 +2,23 @@
 
 All notable changes to Auris Cue Sheets will be documented in this file.
 
+## [0.5.0] - January 2026
+
+### Added
+- **Smart Fill in Sidebar** - Moved AI-powered field fill UI from floating modal to right sidebar Actions panel for better workflow integration
+
+### Changed
+- Smart Fill panel now appears inline under Actions when AI mode is enabled and cells are selected
+- Smart Fill now respects column selection - only suggests for the field(s) you actually selected, not all empty fields
+- Simplified Smart Fill UI - one-click suggestions, auto-learns patterns, removed confusing checkboxes and percentages
+
+### Fixed
+- Delete/Backspace now correctly clears all selected cells at once
+- Single-click now only selects cells; double-click to edit (was entering edit mode on single click, blocking delete)
+- Click-and-drag cell selection now works properly (background click handler was clearing selection after drag)
+
+---
+
 ## [0.4.0] - January 2026
 
 ### Added

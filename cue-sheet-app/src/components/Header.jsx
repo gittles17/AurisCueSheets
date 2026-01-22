@@ -11,6 +11,15 @@ import { useAuth } from '../contexts/AuthContext';
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
   {
+    version: 'v0.5',
+    date: 'January 2026',
+    features: [
+      { title: 'Smart Fill in Sidebar - AI field fill moved to Actions panel', description: 'Smart Fill in Sidebar - AI field fill moved to Actions panel', icon: CheckCircle },
+      { title: 'Improved Cell Selection - click to select, double-click to edit', description: 'Improved Cell Selection - click to select, double-click to edit', icon: CheckCircle },
+      { title: 'Multi-cell Delete - Delete key clears all selected cells', description: 'Multi-cell Delete - Delete key clears all selected cells', icon: CheckCircle },
+    ]
+  },
+  {
     version: 'v0.4',
     date: 'January 2026',
     features: [

@@ -378,7 +378,7 @@ function CueTable({
     // Don't select on non-selectable columns
     if (!columns[colIndex]?.selectable) return;
     
-    event.preventDefault();
+    event.preventDefault(); // Prevent browser text selection
     
     if (event.shiftKey && anchorCell) {
       // Shift+click: extend selection from anchor
@@ -419,6 +419,8 @@ function CueTable({
     const handleMouseUp = () => {
       if (isSelecting) {
         setIsSelecting(false);
+        // Mark that we just finished selecting (prevents background click from clearing)
+        justFinishedSelectingRef.current = true;
         // Notify parent of selection change
         if (selection && onSelectionChange) {
           const bounds = getSelectionBounds();
@@ -452,8 +454,17 @@ function CueTable({
     return () => window.removeEventListener('mouseup', handleMouseUp);
   }, [isSelecting, selection, onSelectionChange, cues, columns, getSelectionBounds]);
 
+  // Track if we just finished selecting (to prevent background click from clearing)
+  const justFinishedSelectingRef = useRef(false);
+  
   // Clear selection when clicking outside table cells
   const handleBackgroundClick = useCallback((e) => {
+    // Don't clear if we just finished a selection drag
+    if (justFinishedSelectingRef.current) {
+      justFinishedSelectingRef.current = false;
+      return;
+    }
+    
     // Check if clicking on a cell or cell content - if so, don't clear
     const clickedOnCell = e.target.closest('[data-cell]') || 
                           e.target.closest('.fill-handle') ||
@@ -470,9 +481,12 @@ function CueTable({
   // Handle keyboard shortcuts (Escape to clear selection, Delete/Backspace to clear cells)
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
-      // Ignore if we're editing a cell (input has focus) or if focus is on an input/textarea
-      if (editingCell) return;
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      // Check if user is actively typing in an input/textarea (not just focused on table)
+      const isTypingInInput = (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && 
+                              !e.target.closest('[data-cell]'); // Allow if input is inside a table cell
+      
+      // Ignore if we're editing a cell OR typing in an input outside the table
+      if (editingCell || isTypingInInput) return;
       
       if (e.key === 'Escape') {
         setSelection(null);
@@ -845,10 +859,10 @@ function CueTable({
           
           // Handle cell selection (for multi-select with shift/ctrl)
           handleCellMouseDown(rowIndex, colIndex, e);
-          
-          // Double-click to edit, single click for selection
-          // For single click editing, only if not shift/ctrl selecting
-          if (column.editable && e.button === 0 && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        }}
+        onDoubleClick={(e) => {
+          // Double-click to enter edit mode
+          if (column.editable && e.button === 0) {
             handleCellClick(cue.id, column.key, value, e);
           }
         }}

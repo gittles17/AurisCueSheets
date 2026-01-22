@@ -174,6 +174,7 @@ function App() {
     hasSelection: hasSmartSelection
   } = useSmartSuggestions({
     selectedCues: selectedRows,
+    selectedCells: selectedCells,  // Pass selected cells with field info
     allCues: cues,
     onUpdateCue: updateCue,
     enabled: aiAssistEnabled
@@ -1650,6 +1651,14 @@ function App() {
             onExtractBMG={handleExtractBMG}
             onOpenBrowser={handleOpenBrowser}
             onOpenBrowserBatch={handleOpenBrowserBatch}
+            // Smart fill props
+            aiAssistEnabled={aiAssistEnabled}
+            smartSuggestions={smartSuggestions}
+            isLoadingSuggestions={isLoadingSuggestions}
+            onSelectField={getSuggestionsForField}
+            onApplySuggestion={applySuggestion}
+            onApplyCustomValue={applyCustomValue}
+            onDismissSuggestions={dismissSuggestions}
           />
         )}
         
@@ -1670,21 +1679,7 @@ function App() {
         )}
       </div>
 
-      {/* Smart Suggestion Panel - Auto-shows when cells with missing data selected (only when AI assist enabled) */}
-      {!showAurisChat && hasProject && smartSuggestions && aiAssistEnabled && !showTour && (
-        <SmartSuggestionPanel
-          suggestions={smartSuggestions}
-          isLoading={isLoadingSuggestions}
-          isRefining={isRefiningSuggestions}
-          activeField={activeSuggestionField}
-          onSelectField={getSuggestionsForField}
-          onApplySuggestion={applySuggestion}
-          onApplyCustom={applyCustomValue}
-          onRefine={refineSuggestions}
-          onDismiss={dismissSuggestions}
-          position={selectionPosition}
-        />
-      )}
+      {/* Smart Suggestion Panel moved to Sidebar Actions section */}
 
       {/* Tour Demo: Mock Suggestion Panel - shows only at Smart Fill step 3 */}
       {showTourPanel && createPortal(

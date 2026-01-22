@@ -6,6 +6,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
  */
 export function useSmartSuggestions({ 
   selectedCues = [], 
+  selectedCells = [],  // Array of { rowId, field } to know which columns were selected
   allCues = [],
   onUpdateCue = null,
   enabled = true  // When false, suggestions are disabled (normal spreadsheet mode)
@@ -117,14 +118,26 @@ export function useSmartSuggestions({
 
   /**
    * Detect which fields are missing in selected tracks
+   * Only checks fields that are actually selected (from selectedCells)
    */
   const detectMissingFields = useCallback(() => {
     if (selectedCues.length === 0) return [];
     
-    const fields = ['artist', 'composer', 'publisher', 'source', 'label'];
+    // Get unique fields from selected cells
+    const selectedFields = new Set(
+      selectedCells
+        .map(cell => cell.field)
+        .filter(field => field && field !== 'visibility' && field !== 'cueNumber' && field !== 'actions')
+    );
+    
+    // If no specific fields selected (e.g., row selection), fall back to checking all editable fields
+    const fieldsToCheck = selectedFields.size > 0 
+      ? Array.from(selectedFields)
+      : ['artist', 'composer', 'publisher', 'source', 'label'];
+    
     const missing = [];
     
-    for (const field of fields) {
+    for (const field of fieldsToCheck) {
       const missingCount = selectedCues.filter(c => 
         !c[field] || c[field].trim() === '' || c[field] === '-'
       ).length;
@@ -133,7 +146,7 @@ export function useSmartSuggestions({
       }
     }
     return missing;
-  }, [selectedCues]);
+  }, [selectedCues, selectedCells]);
 
   /**
    * Get suggestions for a specific field
@@ -364,6 +377,9 @@ export function useSmartSuggestions({
           tracks: selectedCues.map(t => ({ id: t.id, trackName: t.trackName })),
           trackCount: selectedCues.length
         });
+      } else if (missing.length === 0) {
+        // No missing fields in the selected cells - nothing to suggest
+        dismiss();
       }
     }, 300);
     
@@ -372,7 +388,7 @@ export function useSmartSuggestions({
         clearTimeout(debounceRef.current);
       }
     };
-  }, [selectedCues, detectMissingFields, getSuggestionsForField, dismiss, enabled]);
+  }, [selectedCues, selectedCells, detectMissingFields, getSuggestionsForField, dismiss, enabled]);
 
   return {
     // State

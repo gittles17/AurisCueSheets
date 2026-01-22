@@ -1,6 +1,6 @@
 {
   "name": "auris-cue-sheets",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "main": "electron/main.js",
   "description": "Cue sheet management app for music supervisors",
@@ -18,16 +18,33 @@
     "productName": "Auris Cue Sheets",
     "artifactName": "${productName}-v${version}-${arch}.${ext}",
     "directories": {
-      "output": "dist-electron"
+      "output": "/tmp/auris-build"
     },
     "files": [
       "dist/**/*",
       "electron/**/*"
     ],
     "mac": {
-      "target": "dmg",
-      "icon": "assets/icon.icns"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64", "x64"]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "identity": "Developer ID Application: Jonathan Gitlin (YP6TURPH32)",
+      "notarize": true
     },
+    "afterPack": "scripts/afterPack.js",
+    "afterSign": "scripts/notarize.js",
     "publish": {
       "provider": "github",
       "owner": "gittles17",
@@ -51,6 +68,7 @@
     "tmp": "^0.2.5"
   },
   "devDependencies": {
+    "@electron/notarize": "^2.3.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",
