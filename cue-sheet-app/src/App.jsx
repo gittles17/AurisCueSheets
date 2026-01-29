@@ -1,20 +1,29 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import Header from './components/Header';
 import CueTable from './components/CueTable';
 import Sidebar from './components/Sidebar';
 import ProjectTree from './components/ProjectTree';
-import SettingsModal from './components/SettingsModal';
-import BrowserPanel from './components/BrowserPanel';
 import LoginModal from './components/LoginModal';
-import FeedbackModal from './components/FeedbackModal';
 import LoginPage from './components/LoginPage';
-import AurisChatPanel from './components/AurisChatPanel';
 import SmartSuggestionPanel from './components/SmartSuggestionPanel';
 import AnnotationPopover from './components/AnnotationPopover';
 import TabBar from './components/TabBar';
 import GuidedTour, { shouldShowTour, SAMPLE_CUE_DATA } from './components/GuidedTour';
-import ImportWizard from './components/ImportWizard';
+
+// Lazy load heavy components that aren't needed immediately
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const BrowserPanel = lazy(() => import('./components/BrowserPanel'));
+const FeedbackModal = lazy(() => import('./components/FeedbackModal'));
+const AurisChatPanel = lazy(() => import('./components/AurisChatPanel'));
+const ImportWizard = lazy(() => import('./components/ImportWizard'));
+
+// Loading spinner for lazy-loaded components
+const LazyLoadingSpinner = () => (
+  <div className="flex items-center justify-center p-8">
+    <div className="animate-spin rounded-full h-8 w-8 border-2 border-auris-blue border-t-transparent" />
+  </div>
+);
 import { useAuth } from './contexts/AuthContext';
 import { useSmartSuggestions } from './hooks/useSmartSuggestions';
 import { useCueSheet } from './hooks/useCueSheet';
@@ -532,6 +541,12 @@ function App() {
     }
   }, [activeProjectId, cues, projectInfo]);
 
+  // Stable ref for save function to avoid effect re-runs
+  const saveCurrentProjectRef = useRef(saveCurrentProject);
+  useEffect(() => {
+    saveCurrentProjectRef.current = saveCurrentProject;
+  }, [saveCurrentProject]);
+
   // Auto-save when cues or projectInfo change (debounced)
   useEffect(() => {
     if (!activeProjectId || cues.length === 0) return;
@@ -544,8 +559,9 @@ function App() {
     }
     
     // Debounced auto-save after 2 seconds of inactivity
+    // Using ref to avoid dependency on saveCurrentProject which changes often
     saveTimeoutRef.current = setTimeout(() => {
-      saveCurrentProject();
+      saveCurrentProjectRef.current();
     }, 2000);
     
     return () => {
@@ -553,7 +569,7 @@ function App() {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [cues, projectInfo, activeProjectId, saveCurrentProject]);
+  }, [cues, projectInfo, activeProjectId]);
 
   // Listen for BMG data from bookmarklet
   useEffect(() => {
@@ -1011,6 +1027,49 @@ function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSaveProject, handleSaveProjectAs, handleOpenProject]);
+
+  // Handle native macOS menu actions
+  useEffect(() => {
+    const handleMenuAction = (action) => {
+      switch (action) {
+        case 'new-project':
+          handleNewProject();
+          break;
+        case 'open-project':
+          handleOpenProject();
+          break;
+        case 'save':
+          handleSaveProject();
+          break;
+        case 'save-as':
+          handleSaveProjectAs();
+          break;
+        case 'export-xlsx':
+          handleExport('xlsx');
+          break;
+        case 'export-pdf':
+          handleExport('pdf');
+          break;
+        case 'share':
+          handleShare();
+          break;
+        case 'settings':
+          setShowSettings(true);
+          break;
+        case 'feedback':
+          setShowFeedbackModal(true);
+          break;
+        case 'check-updates':
+          window.electronAPI?.updaterCheck?.();
+          break;
+        default:
+          console.log('[Menu] Unknown action:', action);
+      }
+    };
+
+    window.electronAPI?.onMenuAction?.(handleMenuAction);
+    return () => window.electronAPI?.removeMenuActionListener?.();
+  }, [handleNewProject, handleOpenProject, handleSaveProject, handleSaveProjectAs, handleExport, handleShare]);
 
   // Track unsaved changes for ACS
   useEffect(() => {
@@ -1662,20 +1721,22 @@ function App() {
           />
         )}
         
-        {/* Auris Chat Panel (Right) */}
+        {/* Auris Chat Panel (Right) - Lazy Loaded */}
         {showAurisChat && hasProject && (
-          <AurisChatPanel
-            isOpen={showAurisChat}
-            onClose={() => setShowAurisChat(false)}
-            messages={chatMessages}
-            isProcessing={isChatProcessing}
-            onSendMessage={handleSendChatMessage}
-            highlights={unresolvedHighlights}
-            onJumpToHighlight={handleJumpToHighlight}
-            onResolveHighlight={resolveHighlight}
-            selectedRowIds={selectedRows.map(r => r.id)}
-            cues={cues}
-          />
+          <Suspense fallback={<LazyLoadingSpinner />}>
+            <AurisChatPanel
+              isOpen={showAurisChat}
+              onClose={() => setShowAurisChat(false)}
+              messages={chatMessages}
+              isProcessing={isChatProcessing}
+              onSendMessage={handleSendChatMessage}
+              highlights={unresolvedHighlights}
+              onJumpToHighlight={handleJumpToHighlight}
+              onResolveHighlight={resolveHighlight}
+              selectedRowIds={selectedRows.map(r => r.id)}
+              cues={cues}
+            />
+          </Suspense>
         )}
       </div>
 
@@ -1728,32 +1789,40 @@ function App() {
         document.body
       )}
 
-      {/* Settings Modal */}
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        sources={sources}
-        onUpdateSources={setSources}
-      />
+      {/* Settings Modal - Lazy Loaded */}
+      {showSettings && (
+        <Suspense fallback={<LazyLoadingSpinner />}>
+          <SettingsModal
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+            sources={sources}
+            onUpdateSources={setSources}
+          />
+        </Suspense>
+      )}
 
-      {/* Browser Panel for Manual Lookup (Single & Batch) */}
-      <BrowserPanel
-        isOpen={showBrowser}
-        onClose={() => {
-          setShowBrowser(false);
-          setBrowserTrack(null);
-          setBatchTracks([]);
-          setBatchIndex(0);
-          setBatchLibraryFilter(null);
-        }}
-        trackInfo={browserTrack}
-        onDataExtracted={handleBrowserDataExtracted}
-        pendingTracks={batchTracks}
-        currentTrackIndex={batchIndex}
-        onSelectTrack={handleSelectBatchTrack}
-        onBatchComplete={handleBrowserBatchComplete}
-        libraryFilter={batchLibraryFilter}
-      />
+      {/* Browser Panel for Manual Lookup (Single & Batch) - Lazy Loaded */}
+      {showBrowser && (
+        <Suspense fallback={<LazyLoadingSpinner />}>
+          <BrowserPanel
+            isOpen={showBrowser}
+            onClose={() => {
+              setShowBrowser(false);
+              setBrowserTrack(null);
+              setBatchTracks([]);
+              setBatchIndex(0);
+              setBatchLibraryFilter(null);
+            }}
+            trackInfo={browserTrack}
+            onDataExtracted={handleBrowserDataExtracted}
+            pendingTracks={batchTracks}
+            currentTrackIndex={batchIndex}
+            onSelectTrack={handleSelectBatchTrack}
+            onBatchComplete={handleBrowserBatchComplete}
+            libraryFilter={batchLibraryFilter}
+          />
+        </Suspense>
+      )}
 
       {/* New Project Modal */}
       {showNewProjectModal && (
@@ -1812,22 +1881,30 @@ function App() {
         onClose={() => setShowLoginModal(false)} 
       />
 
-      {/* Feedback Modal */}
-      <FeedbackModal 
-        isOpen={showFeedbackModal} 
-        onClose={() => setShowFeedbackModal(false)} 
-      />
+      {/* Feedback Modal - Lazy Loaded */}
+      {showFeedbackModal && (
+        <Suspense fallback={<LazyLoadingSpinner />}>
+          <FeedbackModal 
+            isOpen={showFeedbackModal} 
+            onClose={() => setShowFeedbackModal(false)} 
+          />
+        </Suspense>
+      )}
 
-      {/* Import Wizard */}
-      <ImportWizard
-        isOpen={showImportWizard}
-        projectPath={importWizardPath}
-        onClose={() => {
-          setShowImportWizard(false);
-          setImportWizardPath(null);
-        }}
-        onComplete={handleImportWizardComplete}
-      />
+      {/* Import Wizard - Lazy Loaded */}
+      {showImportWizard && (
+        <Suspense fallback={<LazyLoadingSpinner />}>
+          <ImportWizard
+            isOpen={showImportWizard}
+            projectPath={importWizardPath}
+            onClose={() => {
+              setShowImportWizard(false);
+              setImportWizardPath(null);
+            }}
+            onComplete={handleImportWizardComplete}
+          />
+        </Suspense>
+      )}
 
       {/* Annotation Popover */}
       <AnnotationPopover

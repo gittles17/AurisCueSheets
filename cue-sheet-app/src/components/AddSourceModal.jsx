@@ -20,10 +20,11 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
     description: '',
     searchUrl: '',
     requiresKey: false,
-    keyFields: []
+    keyFields: [],
+    apiKey: ''
   });
-  const [keyFieldsInput, setKeyFieldsInput] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const isEditing = !!editSource;
 
@@ -37,9 +38,9 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
         description: editSource.description || '',
         searchUrl: editSource.searchUrl || editSource.search_url || '',
         requiresKey: editSource.requiresKey || editSource.requires_key || false,
-        keyFields: editSource.keyFields || editSource.key_fields || []
+        keyFields: editSource.keyFields || editSource.key_fields || [],
+        apiKey: editSource.config?.apiKey || ''
       });
-      setKeyFieldsInput((editSource.keyFields || editSource.key_fields || []).join(', '));
     } else {
       setFormData(prev => ({
         ...prev,
@@ -49,11 +50,12 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
         description: '',
         searchUrl: '',
         requiresKey: false,
-        keyFields: []
+        keyFields: [],
+        apiKey: ''
       }));
-      setKeyFieldsInput('');
     }
     setError('');
+    setSuccess(false);
   }, [editSource, defaultCategory, isOpen]);
 
   if (!isOpen) return null;
@@ -66,12 +68,6 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
     }));
   };
 
-  const handleKeyFieldsChange = (value) => {
-    setKeyFieldsInput(value);
-    const fields = value.split(',').map(f => f.trim()).filter(f => f.length > 0);
-    setFormData(prev => ({ ...prev, keyFields: fields }));
-  };
-
   const generateId = (name) => {
     return name.toLowerCase()
       .replace(/[^a-z0-9]+/g, '_')
@@ -81,6 +77,7 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess(false);
 
     if (!formData.name.trim()) {
       setError('Name is required');
@@ -92,22 +89,21 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
       return;
     }
 
-    if (formData.requiresKey && formData.keyFields.length === 0) {
-      setError('Please specify the required key fields');
-      return;
-    }
 
     setIsLoading(true);
 
     try {
+      const sourceId = isEditing ? formData.id : generateId(formData.name);
+      const hasApiKey = !!(formData.apiKey && formData.apiKey.trim());
+      
       const sourceData = {
-        id: isEditing ? formData.id : generateId(formData.name),
+        id: sourceId,
         name: formData.name.trim(),
         category: formData.category,
         description: formData.description.trim(),
         searchUrl: formData.searchUrl.trim() || null,
-        requiresKey: formData.requiresKey,
-        keyFields: formData.keyFields,
+        requiresKey: hasApiKey,
+        keyFields: hasApiKey ? ['apiKey'] : [],
         enabled: true
       };
 
@@ -118,8 +114,18 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
         result = await window.electronAPI.cloudSourcesAdd(sourceData);
       }
 
+      // Save API key locally if provided
+      if (hasApiKey && window.electronAPI?.updateSourceConfig) {
+        await window.electronAPI.updateSourceConfig(sourceId, { apiKey: formData.apiKey.trim() });
+        // Test the connection
+        await window.electronAPI.testConnection(sourceId);
+      }
+
       if (result.success) {
-        onClose(true);
+        setSuccess(true);
+        setTimeout(() => {
+          onClose(true);
+        }, 1200);
       } else {
         setError(result.error || 'Failed to save source');
       }
@@ -154,6 +160,14 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
         <div className="modal-content">
           <form onSubmit={handleSubmit}>
             {error && <div className="error-message">{error}</div>}
+            {success && (
+              <div className="success-message">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ marginRight: 8 }}>
+                  <path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {isEditing ? 'Source updated!' : 'Source added successfully!'}
+              </div>
+            )}
 
             {/* Category selector (only if not editing and no default) */}
             {!isEditing && !defaultCategory && (
@@ -227,38 +241,22 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
               </div>
             )}
 
-            {/* AI/API: Requires Key */}
+            {/* AI/API: API Key */}
             {formData.category !== 'smartlookup' && (
-              <>
-                <div className="form-group checkbox-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      name="requiresKey"
-                      checked={formData.requiresKey}
-                      onChange={handleChange}
-                      disabled={isLoading}
-                    />
-                    <span>Requires API credentials</span>
-                  </label>
-                </div>
-
-                {formData.requiresKey && (
-                  <div className="form-group">
-                    <label>Credential Fields</label>
-                    <input
-                      type="text"
-                      value={keyFieldsInput}
-                      onChange={(e) => handleKeyFieldsChange(e.target.value)}
-                      placeholder="apiKey, clientId, clientSecret"
-                      disabled={isLoading}
-                    />
-                    <p className="help-text">
-                      Comma-separated list of required fields (e.g., apiKey, clientId)
-                    </p>
-                  </div>
-                )}
-              </>
+              <div className="form-group">
+                <label>API Key</label>
+                <input
+                  name="apiKey"
+                  type="password"
+                  value={formData.apiKey}
+                  onChange={handleChange}
+                  placeholder="Enter your API key"
+                  disabled={isLoading}
+                />
+                <p className="help-text">
+                  Your API key will be stored locally and never uploaded to the cloud.
+                </p>
+              </div>
             )}
 
             {/* Actions */}
@@ -266,8 +264,8 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
               <button type="button" onClick={() => onClose(false)} className="cancel-btn" disabled={isLoading}>
                 Cancel
               </button>
-              <button type="submit" className="submit-btn" disabled={isLoading}>
-                {isLoading ? 'Saving...' : (isEditing ? 'Save Changes' : 'Add Source')}
+              <button type="submit" className="submit-btn" disabled={isLoading || success}>
+                {isLoading ? 'Saving...' : success ? 'Done!' : (isEditing ? 'Save Changes' : 'Add Source')}
               </button>
             </div>
           </form>
@@ -411,7 +409,8 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
             margin-bottom: 8px;
           }
           
-          .form-group input[type="text"] {
+          .form-group input[type="text"],
+          .form-group input[type="password"] {
             width: 100%;
             padding: 14px 16px;
             background: #0a0d12;
@@ -468,6 +467,24 @@ export default function AddSourceModal({ isOpen, onClose, editSource, defaultCat
             color: #D4918A;
             font-size: 13px;
             margin-bottom: 16px;
+          }
+          
+          .success-message {
+            display: flex;
+            align-items: center;
+            padding: 12px 14px;
+            background: rgba(91, 176, 154, 0.15);
+            border: 1px solid rgba(91, 176, 154, 0.3);
+            border-radius: 8px;
+            color: #5BB09A;
+            font-size: 13px;
+            margin-bottom: 16px;
+            animation: fadeIn 0.3s ease;
+          }
+          
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
           }
           
           .form-actions {

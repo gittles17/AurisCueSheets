@@ -1,6 +1,6 @@
 {
   "name": "auris-cue-sheets",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "private": true,
   "main": "electron/main.js",
   "description": "Cue sheet management app for music supervisors",
@@ -28,11 +28,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.icns",
@@ -40,11 +46,10 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "identity": "Developer ID Application: Jonathan Gitlin (YP6TURPH32)",
-      "notarize": true
+      "identity": "Jonathan Gitlin (YP6TURPH32)",
+      "notarize": false
     },
     "afterPack": "scripts/afterPack.js",
-    "afterSign": "scripts/notarize.js",
     "publish": {
       "provider": "github",
       "owner": "gittles17",
@@ -65,6 +70,7 @@
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-window": "^2.2.5",
     "tmp": "^0.2.5"
   },
   "devDependencies": {

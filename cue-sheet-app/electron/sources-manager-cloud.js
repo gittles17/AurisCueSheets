@@ -37,17 +37,6 @@ const DEFAULT_SOURCES = {
     config: {},
     isDefault: true
   },
-  spotify: {
-    id: 'spotify',
-    name: 'Spotify',
-    category: 'apis',
-    description: 'Track and artist metadata',
-    enabled: false,
-    requiresKey: true,
-    keyFields: ['clientId', 'clientSecret'],
-    config: {},
-    isDefault: true
-  },
   musicbrainz: {
     id: 'musicbrainz',
     name: 'MusicBrainz',
@@ -56,17 +45,6 @@ const DEFAULT_SOURCES = {
     enabled: true,
     requiresKey: false,
     keyFields: [],
-    config: {},
-    isDefault: true
-  },
-  discogs: {
-    id: 'discogs',
-    name: 'Discogs',
-    category: 'apis',
-    description: 'Music catalog database',
-    enabled: false,
-    requiresKey: true,
-    keyFields: ['token'],
     config: {},
     isDefault: true
   },
@@ -79,42 +57,6 @@ const DEFAULT_SOURCES = {
     description: 'Production music library',
     searchUrl: 'https://bmgproductionmusic.com/en-us/search?q=',
     enabled: true,
-    requiresKey: false,
-    keyFields: [],
-    config: {},
-    isDefault: true
-  },
-  apm: {
-    id: 'apm',
-    name: 'APM Music',
-    category: 'smartlookup',
-    description: 'Production music library',
-    searchUrl: 'https://www.apmmusic.com/search?q=',
-    enabled: true,
-    requiresKey: false,
-    keyFields: [],
-    config: {},
-    isDefault: true
-  },
-  extreme: {
-    id: 'extreme',
-    name: 'Extreme Music',
-    category: 'smartlookup',
-    description: 'Production music library',
-    searchUrl: 'https://www.extrememusic.com/search?term=',
-    enabled: false,
-    requiresKey: false,
-    keyFields: [],
-    config: {},
-    isDefault: true
-  },
-  universal: {
-    id: 'universal',
-    name: 'Universal Production Music',
-    category: 'smartlookup',
-    description: 'Production music library',
-    searchUrl: 'https://www.universalproductionmusic.com/en-us/search?q=',
-    enabled: false,
     requiresKey: false,
     keyFields: [],
     config: {},
@@ -144,18 +86,6 @@ const DEFAULT_SOURCES = {
     config: {},
     isDefault: true
   },
-  sesac: {
-    id: 'sesac',
-    name: 'SESAC',
-    category: 'smartlookup',
-    description: 'PRO database',
-    searchUrl: 'https://www.sesac.com/repertory/search?query=',
-    enabled: false,
-    requiresKey: false,
-    keyFields: [],
-    config: {},
-    isDefault: true
-  }
 };
 
 class CloudSourcesManager {

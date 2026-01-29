@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 // Only load autoUpdater when packaged (not in dev mode)
 // Check if running in dev by looking at the executable path
 const isDevMode = !app || process.execPath.includes('electron') || process.env.ELECTRON_IS_DEV;
@@ -167,7 +167,183 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  createApplicationMenu();
+});
+
+// =============================================
+// Application Menu (macOS native menu bar)
+// =============================================
+function createApplicationMenu() {
+  const isMac = process.platform === 'darwin';
+  
+  const template = [
+    // App Menu (macOS only)
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        {
+          label: 'Settings...',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => mainWindow?.webContents.send('menu-action', 'settings')
+        },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    }] : []),
+    
+    // File Menu
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Project',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => mainWindow?.webContents.send('menu-action', 'new-project')
+        },
+        {
+          label: 'Open Project...',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => mainWindow?.webContents.send('menu-action', 'open-project')
+        },
+        { type: 'separator' },
+        {
+          label: 'Save',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => mainWindow?.webContents.send('menu-action', 'save')
+        },
+        {
+          label: 'Save As...',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => mainWindow?.webContents.send('menu-action', 'save-as')
+        },
+        { type: 'separator' },
+        {
+          label: 'Export',
+          submenu: [
+            {
+              label: 'Export to Excel...',
+              accelerator: 'CmdOrCtrl+E',
+              click: () => mainWindow?.webContents.send('menu-action', 'export-xlsx')
+            },
+            {
+              label: 'Export to PDF...',
+              click: () => mainWindow?.webContents.send('menu-action', 'export-pdf')
+            }
+          ]
+        },
+        {
+          label: 'Share...',
+          click: () => mainWindow?.webContents.send('menu-action', 'share')
+        },
+        { type: 'separator' },
+        {
+          label: 'Send Feedback...',
+          click: () => mainWindow?.webContents.send('menu-action', 'feedback')
+        },
+        ...(isMac ? [] : [
+          { type: 'separator' },
+          {
+            label: 'Settings...',
+            accelerator: 'CmdOrCtrl+,',
+            click: () => mainWindow?.webContents.send('menu-action', 'settings')
+          },
+          { type: 'separator' },
+          { role: 'quit' }
+        ])
+      ]
+    },
+    
+    // Edit Menu
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        ...(isMac ? [
+          { role: 'pasteAndMatchStyle' },
+          { role: 'delete' },
+          { role: 'selectAll' },
+        ] : [
+          { role: 'delete' },
+          { type: 'separator' },
+          { role: 'selectAll' }
+        ])
+      ]
+    },
+    
+    // View Menu
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    
+    // Window Menu
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(isMac ? [
+          { type: 'separator' },
+          { role: 'front' },
+          { type: 'separator' },
+          { role: 'window' }
+        ] : [
+          { role: 'close' }
+        ])
+      ]
+    },
+    
+    // Help Menu
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Auris Documentation',
+          click: async () => {
+            await shell.openExternal('https://github.com/gittles17/AurisCueSheets#readme');
+          }
+        },
+        {
+          label: 'Report an Issue...',
+          click: () => mainWindow?.webContents.send('menu-action', 'feedback')
+        },
+        { type: 'separator' },
+        {
+          label: 'Check for Updates...',
+          click: () => mainWindow?.webContents.send('menu-action', 'check-updates')
+        }
+      ]
+    }
+  ];
+  
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
 
 // =============================================
 // Auto-Updater Configuration (only in production)
@@ -239,7 +415,12 @@ ipcMain.handle('updater:check', async () => {
 
 ipcMain.handle('updater:install', () => {
   if (autoUpdater) {
-    autoUpdater.quitAndInstall(false, true);
+    // On macOS, we need to quit the app and let the update installer handle restart
+    // Setting isSilent=false and isForceRunAfter=true
+    setImmediate(() => {
+      app.removeAllListeners('window-all-closed');
+      autoUpdater.quitAndInstall(false, true);
+    });
   }
 });
 

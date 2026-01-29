@@ -111,38 +111,25 @@ CREATE POLICY "Authenticated users can delete tracks"
 
 -- ============================================
 -- Row Level Security: Data Sources
--- All can read, only admins can write
+-- Public access (app handles admin auth with password)
 -- ============================================
 ALTER TABLE data_sources ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Anyone can read data sources" 
+CREATE POLICY "Public read data sources" 
   ON data_sources FOR SELECT 
-  TO authenticated 
   USING (true);
 
-CREATE POLICY "Only admins can insert data sources" 
+CREATE POLICY "Public insert data sources" 
   ON data_sources FOR INSERT 
-  TO authenticated 
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM user_roles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  ));
+  WITH CHECK (true);
 
-CREATE POLICY "Only admins can update data sources" 
+CREATE POLICY "Public update data sources" 
   ON data_sources FOR UPDATE 
-  TO authenticated 
-  USING (EXISTS (
-    SELECT 1 FROM user_roles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  ));
+  USING (true);
 
-CREATE POLICY "Only admins can delete data sources" 
+CREATE POLICY "Public delete data sources" 
   ON data_sources FOR DELETE 
-  TO authenticated 
-  USING (EXISTS (
-    SELECT 1 FROM user_roles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  ));
+  USING (true);
 
 -- ============================================
 -- Row Level Security: Patterns

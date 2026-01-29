@@ -289,5 +289,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('update-available');
     ipcRenderer.removeAllListeners('update-download-progress');
     ipcRenderer.removeAllListeners('update-downloaded');
+  },
+
+  // ==========================================
+  // Menu Actions (from native macOS menu)
+  // ==========================================
+  onMenuAction: (callback) => {
+    ipcRenderer.on('menu-action', (event, action) => callback(action));
+  },
+  removeMenuActionListener: () => {
+    ipcRenderer.removeAllListeners('menu-action');
   }
 });

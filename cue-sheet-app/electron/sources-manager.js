@@ -166,10 +166,16 @@ function updateSourceConfig(sourceId, config) {
   if (sources[sourceId]) {
     sources[sourceId].config = { ...sources[sourceId].config, ...config };
     sources[sourceId].status = 'configured';
-    saveSources(sources);
-    return sources[sourceId];
+  } else {
+    // Create new source entry for custom sources
+    sources[sourceId] = {
+      enabled: true,
+      status: 'configured',
+      config: config
+    };
   }
-  return null;
+  saveSources(sources);
+  return sources[sourceId];
 }
 
 // Toggle source enabled state
@@ -257,8 +263,12 @@ async function testConnection(sourceId) {
         break;
       
       default:
-        // For unimplemented sources, mark as not available
-        testResult = { success: false, error: 'Source not yet implemented' };
+        // For custom sources with API keys, assume connected if key is present
+        if (source.config?.apiKey) {
+          testResult = { success: true };
+        } else {
+          testResult = { success: false, error: 'API key not configured' };
+        }
     }
 
     // Update status based on test result

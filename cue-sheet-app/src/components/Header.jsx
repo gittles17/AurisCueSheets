@@ -11,12 +11,31 @@ import { useAuth } from '../contexts/AuthContext';
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
   {
+    version: 'v0.7',
+    date: 'January 2026',
+    features: [
+      { title: 'Streamlined API Setup', description: 'Add API sources with keys in one step. No more confusing two-step setup process.', icon: CheckCircle },
+      { title: 'Custom API Sources', description: 'Custom sources with API keys are automatically marked as connected after setup.', icon: CheckCircle },
+      { title: 'Quick Access Header', description: 'Gear icon for Settings and chat icon for Feedback now appear in the top right header.', icon: CheckCircle },
+    ]
+  },
+  {
+    version: 'v0.6',
+    date: 'January 2026',
+    features: [
+      { title: 'Native macOS Menu', description: 'Full File, Edit, View, Window, Help menus with standard keyboard shortcuts.', icon: CheckCircle },
+      { title: 'Table Virtualization', description: 'Smooth scrolling with large cue sheets (500+ tracks) using react-window.', icon: CheckCircle },
+      { title: 'Faster Startup', description: 'Heavy components load on-demand, reducing initial load time by 178 KB.', icon: CheckCircle },
+      { title: 'Smoother Selection', description: 'Debounced drag selection with RAF-based updates for better performance.', icon: CheckCircle },
+    ]
+  },
+  {
     version: 'v0.5',
     date: 'January 2026',
     features: [
-      { title: 'Smart Fill in Sidebar - AI field fill moved to Actions panel', description: 'Smart Fill in Sidebar - AI field fill moved to Actions panel', icon: CheckCircle },
-      { title: 'Improved Cell Selection - click to select, double-click to edit', description: 'Improved Cell Selection - click to select, double-click to edit', icon: CheckCircle },
-      { title: 'Multi-cell Delete - Delete key clears all selected cells', description: 'Multi-cell Delete - Delete key clears all selected cells', icon: CheckCircle },
+      { title: 'Smart Fill in Sidebar', description: 'AI-powered field suggestions now appear in the Actions panel for better workflow integration.', icon: CheckCircle },
+      { title: 'Improved Cell Selection', description: 'Click to select cells, double-click to edit. Drag to select multiple cells at once.', icon: CheckCircle },
+      { title: 'Multi-cell Delete', description: 'Press Delete or Backspace to clear all selected cells simultaneously.', icon: CheckCircle },
     ]
   },
   {
@@ -230,6 +249,24 @@ function Header({
             </button>
           </>
         )}
+
+        {/* Feedback button */}
+        <button
+          onClick={onOpenFeedback}
+          className="p-2 rounded-md hover:bg-auris-card transition-colors text-auris-text-muted hover:text-auris-text"
+          title="Send Feedback"
+        >
+          <ChatCircle size={18} />
+        </button>
+
+        {/* Settings button */}
+        <button
+          onClick={onOpenSettings}
+          className="p-2 rounded-md hover:bg-auris-card transition-colors text-auris-text-muted hover:text-auris-text"
+          title="Settings (⌘,)"
+        >
+          <Gear size={18} />
+        </button>
 
         {/* Guided Tour button */}
         {onStartTour && (

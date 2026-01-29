@@ -32,9 +32,7 @@ const DEFAULT_SOURCE_GROUPS = {
     description: 'Direct API connections for automatic lookup',
     sources: [
       { id: 'itunes', name: 'iTunes / Apple Music', requiresKey: false, description: 'Artist, album, and track info' },
-      { id: 'spotify', name: 'Spotify', requiresKey: true, keyFields: ['clientId', 'clientSecret'], description: 'Track and artist metadata' },
-      { id: 'musicbrainz', name: 'MusicBrainz', requiresKey: false, description: 'Open music database' },
-      { id: 'discogs', name: 'Discogs', requiresKey: true, keyFields: ['token'], description: 'Music catalog database' }
+      { id: 'musicbrainz', name: 'MusicBrainz', requiresKey: false, description: 'Open music database' }
     ]
   },
   smartlookup: {
@@ -43,12 +41,8 @@ const DEFAULT_SOURCE_GROUPS = {
     description: 'Browser-based lookup for sources without APIs',
     sources: [
       { id: 'bmg', name: 'BMG Production Music', requiresKey: false, description: 'Production music library' },
-      { id: 'apm', name: 'APM Music', requiresKey: false, description: 'Production music library' },
-      { id: 'extreme', name: 'Extreme Music', requiresKey: false, description: 'Production music library' },
-      { id: 'universal', name: 'Universal Production', requiresKey: false, description: 'Production music library' },
       { id: 'bmi', name: 'BMI Repertoire', requiresKey: false, description: 'PRO database' },
-      { id: 'ascap', name: 'ASCAP ACE', requiresKey: false, description: 'PRO database' },
-      { id: 'sesac', name: 'SESAC', requiresKey: false, description: 'PRO database' }
+      { id: 'ascap', name: 'ASCAP ACE', requiresKey: false, description: 'PRO database' }
     ]
   }
 };
@@ -144,12 +138,16 @@ function SourcesPanel({ sources, onConfigureSource, onToggleSource, onTestConnec
   };
 
   const handleToggle = async (sourceId, enabled) => {
-    console.log('[SourcesPanel] Toggling source:', sourceId, 'to', enabled);
+    // Optimistic update - update UI immediately
+    setCloudSources(prev => ({
+      ...prev,
+      [sourceId]: { ...prev[sourceId], enabled }
+    }));
     
-    // Call local toggle first (updates UI immediately via parent state)
-    await onToggleSource?.(sourceId, enabled);
+    // Call local toggle
+    onToggleSource?.(sourceId, enabled);
     
-    // Then sync to cloud if admin
+    // Then sync to cloud (fire and forget)
     if (isAdmin && window.electronAPI?.cloudSourcesToggle) {
       try {
         await window.electronAPI.cloudSourcesToggle(sourceId, enabled);
@@ -160,18 +158,33 @@ function SourcesPanel({ sources, onConfigureSource, onToggleSource, onTestConnec
   };
 
   const handleDelete = async (sourceId, sourceName) => {
-    if (!confirm(`Are you sure you want to delete "${sourceName}"? This will remove it for all users.`)) {
+    if (!confirm(`Are you sure you want to delete "${sourceName}"?`)) {
       return;
     }
     
-    try {
-      const result = await window.electronAPI.cloudSourcesDelete(sourceId);
-      if (!result.success) {
-        alert(result.error || 'Failed to delete source');
+    // Optimistic update - remove from UI immediately
+    setSourceGroups(prev => {
+      const updated = { ...prev };
+      for (const key of Object.keys(updated)) {
+        updated[key] = {
+          ...updated[key],
+          sources: updated[key].sources.filter(s => s.id !== sourceId)
+        };
       }
+      return updated;
+    });
+    setCloudSources(prev => {
+      const updated = { ...prev };
+      delete updated[sourceId];
+      return updated;
+    });
+    
+    // Then sync to cloud (fire and forget)
+    try {
+      await window.electronAPI.cloudSourcesDelete(sourceId);
     } catch (err) {
       console.error('[SourcesPanel] Delete error:', err);
-      alert('Failed to delete source');
+      // Could restore here if needed, but for now just log
     }
   };
 

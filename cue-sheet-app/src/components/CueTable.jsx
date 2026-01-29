@@ -1,6 +1,30 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, memo, useMemo } from 'react';
+import { List } from 'react-window';
 import { CircleNotch, Warning, CheckCircle, XCircle, Database, Sparkle, Eye, EyeSlash, NotePencil, MagnifyingGlassMinus, MagnifyingGlassPlus, Lightning } from '@phosphor-icons/react';
 import AutocompleteInput from './AutocompleteInput';
+
+// Row height constant for virtualization
+const ROW_HEIGHT = 48;
+
+// Debounce utility for selection updates (~60fps)
+function useDebounce(callback, delay = 16) {
+  const timeoutRef = useRef(null);
+  const callbackRef = useRef(callback);
+  
+  // Update callback ref when it changes
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
+  
+  return useCallback((...args) => {
+    if (timeoutRef.current) {
+      cancelAnimationFrame(timeoutRef.current);
+    }
+    timeoutRef.current = requestAnimationFrame(() => {
+      callbackRef.current(...args);
+    });
+  }, []);
+}
 
 /**
  * Get confidence color class based on level
@@ -130,6 +154,72 @@ const HIGHLIGHT_COLORS = {
   purple: 'bg-purple-500/20 border-l-purple-500',
 };
 
+/**
+ * Virtualized Row Component - Memoized for performance
+ * Used by react-window to render only visible rows
+ * react-window v2 passes index, style, and any rowProps directly
+ */
+const VirtualizedRow = memo(function VirtualizedRow({ 
+  index, 
+  style,
+  // rowProps are spread directly onto the component in v2
+  cues, 
+  columns, 
+  columnWidths, 
+  getRowBg, 
+  getRowHighlightColor, 
+  getRowAnnotation,
+  onAnnotationClick,
+  renderCell,
+  setHoveredRow 
+}) {
+  
+  const cue = cues[index];
+  if (!cue) return null;
+  
+  const highlightColor = getRowHighlightColor?.(cue.id);
+  const annotation = getRowAnnotation?.(cue.id);
+  
+  return (
+    <div
+      style={style}
+      className={`
+        flex px-4 border-b border-auris-border/20 transition-colors relative
+        hover:bg-auris-card/30
+        ${getRowBg(cue)}
+        ${cue.hidden ? 'opacity-40' : ''}
+        ${highlightColor ? 'border-l-2' : ''}
+      `}
+      onMouseEnter={() => setHoveredRow(cue.id)}
+      onMouseLeave={() => setHoveredRow(null)}
+    >
+      {/* Annotation badge */}
+      {annotation && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onAnnotationClick?.(cue.id);
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full bg-auris-card border border-auris-border hover:bg-auris-card/80 transition-colors z-10"
+          title={annotation}
+        >
+          <NotePencil size={12} className="text-auris-text-muted" />
+        </button>
+      )}
+      
+      {columns.map((col, colIndex) => (
+        <div
+          key={col.key}
+          className={`px-1.5 flex items-center ${cue.hidden && col.key !== 'visibility' ? 'pointer-events-none' : ''}`}
+          style={{ width: columnWidths[col.key], minWidth: col.minWidth, flexShrink: 0, height: ROW_HEIGHT }}
+        >
+          {renderCell(cue, col, index, colIndex)}
+        </div>
+      ))}
+    </div>
+  );
+});
+
 function CueTable({ 
   cues, 
   onUpdateCue,
@@ -178,6 +268,9 @@ function CueTable({
   // Zoom state
   const [zoomLevel, setZoomLevel] = useState(1);
   
+  // Container height for virtualization
+  const [containerHeight, setContainerHeight] = useState(600);
+  
   // Column resize state
   const [columnWidths, setColumnWidths] = useState({
     visibility: 28,
@@ -196,6 +289,21 @@ function CueTable({
   const [resizingColumn, setResizingColumn] = useState(null);
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(0);
+
+  // Track container height for virtualization
+  useEffect(() => {
+    const updateHeight = () => {
+      if (scrollContainerRef.current) {
+        // Subtract header height (~45px) and footer height (~40px)
+        const availableHeight = scrollContainerRef.current.clientHeight - 45;
+        setContainerHeight(Math.max(200, availableHeight));
+      }
+    };
+    
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
 
   // Restore scroll position when tab changes
   useEffect(() => {
@@ -401,17 +509,26 @@ function CueTable({
     }
   }, [anchorCell, columns]);
 
-  // Handle cell mouse enter during drag
+  // Handle cell mouse enter during drag - debounced for performance
+  const pendingSelectionRef = useRef(null);
   const handleCellMouseEnter = useCallback((rowIndex, colIndex) => {
     if (!isSelecting || !anchorCell) return;
     if (!columns[colIndex]?.selectable) return;
     
-    setSelection({
+    // Store pending selection and use RAF to batch updates
+    const newSelection = {
       startRow: anchorCell.row,
       startCol: anchorCell.col,
       endRow: rowIndex,
       endCol: colIndex
-    });
+    };
+    
+    if (!pendingSelectionRef.current) {
+      pendingSelectionRef.current = requestAnimationFrame(() => {
+        setSelection(newSelection);
+        pendingSelectionRef.current = null;
+      });
+    }
   }, [isSelecting, anchorCell, columns]);
 
   // Handle mouse up - end selection
@@ -892,7 +1009,7 @@ function CueTable({
     );
   };
 
-  const getRowBg = (cue) => {
+  const getRowBg = useCallback((cue) => {
     const highlightColor = getRowHighlightColor?.(cue.id);
     if (highlightColor && HIGHLIGHT_COLORS[highlightColor]) {
       return HIGHLIGHT_COLORS[highlightColor];
@@ -915,7 +1032,20 @@ function CueTable({
     }
     
     return '';
-  };
+  }, [getRowHighlightColor]);
+
+  // Memoized row data for react-window
+  const rowData = useMemo(() => ({
+    cues,
+    columns,
+    columnWidths,
+    getRowBg,
+    getRowHighlightColor,
+    getRowAnnotation,
+    onAnnotationClick,
+    renderCell,
+    setHoveredRow,
+  }), [cues, columns, columnWidths, getRowBg, getRowHighlightColor, getRowAnnotation, onAnnotationClick, renderCell]);
   
   const visibleCues = cues.filter(c => !c.hidden);
   const totalCues = visibleCues.length;
@@ -983,58 +1113,21 @@ function CueTable({
             </div>
           </div>
 
-          {/* Table Body */}
-          <div>
-            {cues.map((cue, rowIndex) => {
-              const highlightColor = getRowHighlightColor?.(cue.id);
-              const annotation = getRowAnnotation?.(cue.id);
-              
-              return (
-                <div
-                  key={cue.id}
-                  className={`
-                    flex px-4 py-2 border-b border-auris-border/20 transition-colors relative
-                    hover:bg-auris-card/30
-                    ${getRowBg(cue)}
-                    ${cue.hidden ? 'opacity-40' : ''}
-                    ${highlightColor ? 'border-l-2' : ''}
-                  `}
-                  onMouseEnter={() => setHoveredRow(cue.id)}
-                  onMouseLeave={() => setHoveredRow(null)}
-                >
-                  {/* Annotation badge */}
-                  {annotation && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onAnnotationClick?.(cue.id);
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full bg-auris-card border border-auris-border hover:bg-auris-card/80 transition-colors z-10"
-                      title={annotation}
-                    >
-                      <NotePencil size={12} className="text-auris-text-muted" />
-                    </button>
-                  )}
-                  
-                  {columns.map((col, colIndex) => (
-                    <div
-                      key={col.key}
-                      className={`px-1.5 flex items-center ${cue.hidden && col.key !== 'visibility' ? 'pointer-events-none' : ''}`}
-                      style={{ width: columnWidths[col.key], minWidth: col.minWidth, flexShrink: 0 }}
-                    >
-                      {renderCell(cue, col, rowIndex, colIndex)}
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-            
-            {cues.length === 0 && (
-              <div className="flex items-center justify-center h-40 text-auris-text-muted text-sm">
-                No cues found
-              </div>
-            )}
-          </div>
+          {/* Table Body - Virtualized */}
+          {cues.length > 0 ? (
+            <List
+              defaultHeight={containerHeight}
+              rowCount={cues.length}
+              rowHeight={ROW_HEIGHT}
+              overscanCount={5}
+              rowComponent={VirtualizedRow}
+              rowProps={rowData}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-40 text-auris-text-muted text-sm">
+              No cues found
+            </div>
+          )}
         </div>
       </div>
 

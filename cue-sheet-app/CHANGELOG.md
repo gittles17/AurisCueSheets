@@ -2,6 +2,34 @@
 
 All notable changes to Auris Cue Sheets will be documented in this file.
 
+## [0.7.0] - January 2026
+
+### Added
+- **Streamlined API Setup** - Add API sources with keys in one step. No more confusing two-step setup process.
+- **Custom API Sources** - Custom sources with API keys are automatically marked as connected after setup.
+- **Quick Access Header** - Gear icon for Settings and chat icon for Feedback now appear in the top right header.
+
+---
+
+## [0.6.0] - January 2026
+
+### Added
+- **Native macOS Menu Bar** - Full File, Edit, View, Window, and Help menus with standard keyboard shortcuts (Cmd+N, Cmd+O, Cmd+S, Cmd+E, etc.)
+- **Table Virtualization** - react-window integration for smooth scrolling with large cue sheets (500+ tracks)
+- **Lazy Loading** - Heavy components (Settings, Browser, Chat, Import Wizard) load on-demand for faster startup
+- **Debounced Selection** - Smoother cell selection during drag operations with RAF-based updates
+
+### Changed
+- Initial load time reduced by ~178 KB through code splitting
+- Auto-save now uses stable refs to prevent unnecessary effect re-runs
+- Improved memory usage when scrolling large tables
+
+### Fixed
+- Cell selection lag during rapid mouse movements
+- Unnecessary re-renders during auto-save debounce
+
+---
+
 ## [0.5.0] - January 2026
 
 ### Added

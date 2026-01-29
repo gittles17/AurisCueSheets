@@ -9,11 +9,11 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.5';
+const VERSION = 'v0.7';
 const WHATS_NEW = [
-  { title: 'Smart Fill in Sidebar - AI field fill moved to Actions panel', description: 'Smart Fill in Sidebar - AI field fill moved to Actions panel' },
-  { title: 'Improved Cell Selection - click to select, double-click to edit', description: 'Improved Cell Selection - click to select, double-click to edit' },
-  { title: 'Multi-cell Delete - Delete key clears all selected cells', description: 'Multi-cell Delete - Delete key clears all selected cells' },
+  { title: 'Streamlined API Setup', description: 'Paste API keys directly when adding sources' },
+  { title: 'Custom API Sources', description: 'Add any API with your own credentials' },
+  { title: 'Quick Access Header', description: 'Settings and Feedback icons in header' },
 ];
 
 export default function LoginPage({ onLogin }) {

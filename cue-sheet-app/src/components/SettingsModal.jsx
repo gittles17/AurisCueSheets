@@ -360,7 +360,10 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
           { key: 'token', label: 'Personal Access Token', type: 'password', placeholder: 'Enter Discogs Token' }
         ];
       default:
-        return [];
+        // For custom sources, provide a generic API key field
+        return [
+          { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Enter API key' }
+        ];
     }
   };
 
