@@ -361,7 +361,19 @@ function ProjectTree({
           if (e.dataTransfer.files.length > 0) {
             const file = e.dataTransfer.files[0];
             // In Electron, files have a path property
-            const filePath = file.path || file.name;
+            // For network/SMB drives, file.path may be empty - try URI list as fallback
+            let filePath = file.path || '';
+            if (!filePath) {
+              // Try to get path from URI list (network drives often provide this)
+              const uriList = e.dataTransfer.getData('text/uri-list');
+              if (uriList) {
+                filePath = uriList.split('\n')[0].trim();
+                console.log('[ProjectTree] Using URI from drop:', filePath);
+              } else {
+                filePath = file.name;
+                console.warn('[ProjectTree] file.path not available, falling back to file.name:', file.name);
+              }
+            }
             if (filePath.endsWith('.prproj')) {
               onFileDrop?.(filePath);
             }

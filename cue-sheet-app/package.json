@@ -1,6 +1,6 @@
 {
   "name": "auris-cue-sheets",
-  "version": "0.7.0",
+  "version": "0.11.0",
   "private": true,
   "main": "electron/main.js",
   "description": "Cue sheet management app for music supervisors",
@@ -47,7 +47,9 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "identity": "Jonathan Gitlin (YP6TURPH32)",
-      "notarize": false
+      "notarize": {
+        "teamId": "YP6TURPH32"
+      }
     },
     "afterPack": "scripts/afterPack.js",
     "publish": {
@@ -61,8 +63,9 @@
     "@phosphor-icons/react": "^2.1.10",
     "@supabase/supabase-js": "^2.90.1",
     "better-sqlite3": "^11.0.0",
+    "electron-log": "^5.4.3",
     "electron-updater": "^6.7.3",
-    "exceljs": "^4.4.0",
+    "exceljs": "4.3.0",
     "fast-xml-parser": "^4.3.2",
     "music-metadata": "^7.14.0",
     "puppeteer-core": "^21.0.0",

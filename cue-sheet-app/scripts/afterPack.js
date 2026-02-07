@@ -11,6 +11,16 @@ const fs = require('fs');
 
 const IDENTITY = 'Developer ID Application: Jonathan Gitlin (YP6TURPH32)';
 
+// Check if signing identity is available
+function hasSigningIdentity() {
+  try {
+    const output = require('child_process').execSync('security find-identity -v -p codesigning', { encoding: 'utf8' });
+    return output.includes(IDENTITY);
+  } catch (e) {
+    return false;
+  }
+}
+
 function runCommand(cmd, description) {
   console.log(`  ${description}...`);
   try {
@@ -57,6 +67,19 @@ exports.default = async function afterPack(context) {
   
   console.log('\n=== afterPack: Preparing app for signing ===');
   console.log(`App: ${appPath}`);
+  
+  // Check if signing is possible
+  if (!hasSigningIdentity()) {
+    console.log('\n⚠️  Signing certificate not found in keychain. Building UNSIGNED.');
+    console.log('   Users will need to right-click > Open on first launch.');
+    
+    // Still remove extended attributes
+    console.log('\n1. Removing extended attributes...');
+    runCommand(`xattr -cr "${appPath}" 2>/dev/null || true`, 'Clearing xattrs');
+    
+    console.log('\n=== afterPack complete (unsigned) ===\n');
+    return;
+  }
   
   // Step 1: Remove extended attributes (may not work fully on iCloud, but try)
   console.log('\n1. Removing extended attributes...');

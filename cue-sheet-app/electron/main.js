@@ -1,4 +1,11 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, globalShortcut } = require('electron');
+
+// File logging - writes to ~/Library/Logs/Auris Cue Sheets/main.log
+const log = require('electron-log');
+Object.assign(console, log.functions);
+log.transports.file.level = 'info';
+log.transports.file.maxSize = 5 * 1024 * 1024; // 5 MB max log size
+
 // Only load autoUpdater when packaged (not in dev mode)
 // Check if running in dev by looking at the executable path
 const isDevMode = !app || process.execPath.includes('electron') || process.env.ELECTRON_IS_DEV;
@@ -334,6 +341,19 @@ function createApplicationMenu() {
         },
         { type: 'separator' },
         {
+          label: 'Show Log File',
+          click: () => {
+            const logPath = log.transports.file.getFile().path;
+            shell.showItemInFolder(logPath);
+          }
+        },
+        {
+          label: 'Toggle Developer Tools',
+          accelerator: 'CmdOrCtrl+Shift+I',
+          click: () => mainWindow?.webContents.toggleDevTools()
+        },
+        { type: 'separator' },
+        {
           label: 'Check for Updates...',
           click: () => mainWindow?.webContents.send('menu-action', 'check-updates')
         }
@@ -445,11 +465,25 @@ ipcMain.handle('dialog:openPrproj', async () => {
     filters: [
       { name: 'Premiere Pro Projects', extensions: ['prproj'] }
     ],
-    properties: ['openFile']
+    properties: ['openFile'],
+    securityScopedBookmarks: true
   });
   
   if (result.canceled) {
     return null;
+  }
+  
+  // If security-scoped bookmarks are returned (network files), start accessing
+  if (result.bookmarks && result.bookmarks.length > 0) {
+    try {
+      const stopAccessing = app.startAccessingSecurityScopedResource(result.bookmarks[0]);
+      // Store the stop function so we can release access later if needed
+      if (!global._scopedBookmarks) global._scopedBookmarks = [];
+      global._scopedBookmarks.push(stopAccessing);
+      console.log('[Main] Started accessing security-scoped bookmark for:', result.filePaths[0]);
+    } catch (err) {
+      console.warn('[Main] Failed to access security-scoped bookmark:', err.message);
+    }
   }
   
   return result.filePaths[0];
@@ -469,34 +503,31 @@ ipcMain.handle('prproj:parse', async (event, filePath) => {
 // Includes: XML parsing, categorization, durations, stem grouping,
 // file metadata extraction, learned DB matching, pattern fills, use type detection
 ipcMain.handle('wizard:parseProject', async (event, filePath) => {
-  try {
-    const importPipeline = require('./import-pipeline');
+  const importPipeline = require('./import-pipeline');
+  
+  // Helper to run the pipeline with a given path
+  async function runPipeline(resolvedPath) {
+    console.log('[Wizard] Running full pipeline for:', resolvedPath);
     
-    console.log('[Wizard] Running full pipeline for:', filePath);
-    
-    // Progress callback to send updates to renderer
     const onProgress = (progressData) => {
-      // Send progress to the renderer process
       if (event.sender && !event.sender.isDestroyed()) {
         event.sender.send('wizard:progress', progressData);
       }
     };
     
-    // Run the complete 8-step pipeline with progress reporting
-    const pipelineResult = await importPipeline.runFullPipeline(filePath, { 
+    const pipelineResult = await importPipeline.runFullPipeline(resolvedPath, { 
       fps: 23.976,
       onProgress 
     });
     
     console.log(`[Wizard] Pipeline completed in ${pipelineResult.totalElapsedMs}ms`);
     console.log(`[Wizard] Final: ${pipelineResult.result.length} cues`);
-    console.log(`[Wizard] With composer: ${pipelineResult.finalSummary.withComposer}, With publisher: ${pipelineResult.finalSummary.withPublisher}`);
     
     return {
       success: true,
       projectName: pipelineResult.projectName,
       spotTitle: pipelineResult.spotTitle,
-      rawClips: pipelineResult.result, // Use final result for all steps (has all data)
+      rawClips: pipelineResult.result,
       categorizedClips: pipelineResult.result,
       groupedClips: pipelineResult.result,
       summary: {
@@ -513,7 +544,52 @@ ipcMain.handle('wizard:parseProject', async (event, filePath) => {
         opusUsed: false,
       }
     };
+  }
+  
+  try {
+    return await runPipeline(filePath);
   } catch (error) {
+    // If file not found, show a file picker so the user can locate it
+    if (error.message.includes('File not found')) {
+      console.log('[Wizard] File not found, showing file picker for user to locate:', filePath);
+      const fileName = path.basename(filePath);
+      
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: `Locate "${fileName}"`,
+        message: `Could not find "${fileName}". Please navigate to the file.`,
+        filters: [
+          { name: 'Premiere Pro Projects', extensions: ['prproj'] }
+        ],
+        properties: ['openFile'],
+        securityScopedBookmarks: true
+      });
+      
+      if (result.canceled || !result.filePaths.length) {
+        return { success: false, error: 'File selection canceled' };
+      }
+      
+      const userSelectedPath = result.filePaths[0];
+      console.log('[Wizard] User selected file:', userSelectedPath);
+      
+      // Start accessing security-scoped bookmark if available
+      if (result.bookmarks && result.bookmarks.length > 0) {
+        try {
+          const stopAccessing = app.startAccessingSecurityScopedResource(result.bookmarks[0]);
+          if (!global._scopedBookmarks) global._scopedBookmarks = [];
+          global._scopedBookmarks.push(stopAccessing);
+        } catch (err) {
+          console.warn('[Wizard] Failed to access security-scoped bookmark:', err.message);
+        }
+      }
+      
+      try {
+        return await runPipeline(userSelectedPath);
+      } catch (retryError) {
+        console.error('[Wizard] Parse error after user selection:', retryError);
+        return { success: false, error: retryError.message };
+      }
+    }
+    
     console.error('[Wizard] Parse error:', error);
     return { success: false, error: error.message };
   }

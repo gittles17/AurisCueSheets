@@ -853,7 +853,7 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
                     className="h-8 mx-auto mb-3 opacity-80"
                   />
                   <h3 className="text-base font-semibold mb-1">Auris Cue Sheets</h3>
-                  <p className="text-xs text-auris-text-muted mb-3">Version 0.5.0</p>
+                  <p className="text-xs text-auris-text-muted mb-3">Version 0.11.0</p>
                   <p className="text-xs text-auris-text-muted">
                     Automated cue sheet generator for Premiere Pro
                   </p>

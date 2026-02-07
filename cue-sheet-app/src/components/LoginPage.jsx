@@ -9,11 +9,10 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.7';
+const VERSION = 'v0.11';
 const WHATS_NEW = [
-  { title: 'Streamlined API Setup', description: 'Paste API keys directly when adding sources' },
-  { title: 'Custom API Sources', description: 'Add any API with your own credentials' },
-  { title: 'Quick Access Header', description: 'Settings and Feedback icons in header' },
+  { title: 'Apple Notarization', description: 'App is now signed and notarized by Apple. Just double-click to open.' },
+  { title: 'Feedback Fix', description: 'User feedback now reliably saves to the cloud and shows in the admin panel.' },
 ];
 
 export default function LoginPage({ onLogin }) {

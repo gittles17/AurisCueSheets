@@ -11,6 +11,40 @@ import { useAuth } from '../contexts/AuthContext';
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
   {
+    version: 'v0.11',
+    date: 'February 2026',
+    features: [
+      { title: 'Apple Notarization', description: 'App is now code-signed and notarized by Apple. Users can double-click to open without Terminal workarounds.', icon: CheckCircle },
+      { title: 'Feedback System Fix', description: 'User feedback now reliably saves to the cloud and appears in the admin panel. Previously feedback from other users was invisible.', icon: CheckCircle },
+      { title: 'Improved Release Pipeline', description: 'Release script auto-generates correct installation instructions based on signed vs. unsigned builds.', icon: CheckCircle },
+    ]
+  },
+  {
+    version: 'v0.10',
+    date: 'February 2026',
+    features: [
+      { title: 'Network Volume Search', description: 'Recursively searches all mounted volumes under /Volumes/ to find .prproj files on network drives when not found locally.', icon: CheckCircle },
+      { title: 'Launch Crash Fix', description: 'Fixed exceljs dependency crash by pinning to v4.3.0. Improved error messages for missing files.', icon: CheckCircle },
+    ]
+  },
+  {
+    version: 'v0.9',
+    date: 'February 2026',
+    features: [
+      { title: 'Network Drive Support', description: 'Import .prproj files directly from SMB and network drives without copying locally first.', icon: CheckCircle },
+      { title: 'Security-Scoped Bookmarks', description: 'Persistent file access for network volumes through macOS security-scoped bookmarks.', icon: CheckCircle },
+      { title: 'Path Normalization', description: 'Automatic handling of file://, smb://, and URL-encoded paths for seamless imports.', icon: CheckCircle },
+    ]
+  },
+  {
+    version: 'v0.8',
+    date: 'February 2026',
+    features: [
+      { title: 'Downloads Folder Import', description: 'Import .prproj files dragged from the Downloads folder. Previously only searched Desktop and Documents.', icon: CheckCircle },
+      { title: 'Graceful Unsigned Builds', description: 'afterPack.js detects if signing certificate is missing and builds unsigned instead of failing.', icon: CheckCircle },
+    ]
+  },
+  {
     version: 'v0.7',
     date: 'January 2026',
     features: [

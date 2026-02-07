@@ -236,9 +236,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE feedback;
 
 -- RLS for feedback
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Anyone can submit feedback" ON feedback FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Admins can read all feedback" ON feedback FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Admins can update feedback" ON feedback FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "Anyone can submit feedback" ON feedback FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Admins can read all feedback" ON feedback FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Admins can update feedback" ON feedback FOR UPDATE TO anon, authenticated USING (true);
 
 -- RLS for user_profiles
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;

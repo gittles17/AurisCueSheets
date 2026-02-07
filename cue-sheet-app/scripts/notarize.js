@@ -7,7 +7,7 @@
  * 
  * Required environment variables:
  *   APPLE_ID          - Your Apple ID email
- *   APPLE_APP_PASSWORD - App-specific password (NOT your Apple ID password)
+ *   APPLE_APP_SPECIFIC_PASSWORD - App-specific password (NOT your Apple ID password)
  *   APPLE_TEAM_ID     - Your Apple Developer Team ID
  */
 
@@ -24,9 +24,9 @@ exports.default = async function notarizing(context) {
   }
 
   // Skip if not signing (e.g., local dev builds)
-  if (!process.env.APPLE_ID || !process.env.APPLE_APP_PASSWORD || !process.env.APPLE_TEAM_ID) {
+  if (!process.env.APPLE_ID || !process.env.APPLE_APP_SPECIFIC_PASSWORD || !process.env.APPLE_TEAM_ID) {
     console.log('Skipping notarization - Apple credentials not configured');
-    console.log('Set APPLE_ID, APPLE_APP_PASSWORD, and APPLE_TEAM_ID to enable notarization');
+    console.log('Set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID to enable notarization');
     return;
   }
 
@@ -41,7 +41,7 @@ exports.default = async function notarizing(context) {
       tool: 'notarytool',
       appPath,
       appleId: process.env.APPLE_ID,
-      appleIdPassword: process.env.APPLE_APP_PASSWORD,
+      appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
       teamId: process.env.APPLE_TEAM_ID,
     });
     console.log('Notarization complete!');

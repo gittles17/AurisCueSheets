@@ -14,9 +14,9 @@
  * 6. Create GitHub release and upload assets
  * 
  * Required Environment Variables for Code Signing:
- *   APPLE_ID          - Your Apple ID email
- *   APPLE_APP_PASSWORD - App-specific password from appleid.apple.com
- *   APPLE_TEAM_ID     - Your Apple Developer Team ID
+ *   APPLE_ID                    - Your Apple ID email
+ *   APPLE_APP_SPECIFIC_PASSWORD - App-specific password from appleid.apple.com
+ *   APPLE_TEAM_ID               - Your Apple Developer Team ID
  * 
  * The app will be signed with your Developer ID Application certificate
  * from Keychain (installed automatically when you download from Apple Developer portal)
@@ -34,9 +34,9 @@ const REPO_NAME = 'AurisCueSheets';
 
 // Apple signing credentials (optional - will skip signing if not set)
 const APPLE_ID = process.env.APPLE_ID;
-const APPLE_APP_PASSWORD = process.env.APPLE_APP_PASSWORD;
+const APPLE_APP_SPECIFIC_PASSWORD = process.env.APPLE_APP_SPECIFIC_PASSWORD;
 const APPLE_TEAM_ID = process.env.APPLE_TEAM_ID;
-const IS_SIGNED_BUILD = APPLE_ID && APPLE_APP_PASSWORD && APPLE_TEAM_ID;
+const IS_SIGNED_BUILD = APPLE_ID && APPLE_APP_SPECIFIC_PASSWORD && APPLE_TEAM_ID;
 
 // Paths
 const ROOT_DIR = path.resolve(__dirname, '..');
@@ -216,23 +216,31 @@ async function createGitHubRelease(version, features) {
     return null;
   }
   
-  const signedNote = IS_SIGNED_BUILD 
-    ? '✅ This release is code-signed and notarized by Apple for your security.'
-    : '⚠️ This release is unsigned. You may need to right-click and select "Open" on first launch.';
+  const installSteps = IS_SIGNED_BUILD
+    ? `### Installation
+1. Download the DMG file below (ARM64 for Apple Silicon Macs, x64 for Intel Macs)
+2. Open the DMG and drag Auris Cue Sheets to Applications
+3. Launch the app from Applications`
+    : `### Installation
+1. Download the DMG file below (ARM64 for Apple Silicon Macs, x64 for Intel Macs)
+2. Open the DMG and drag Auris Cue Sheets to Applications
+3. Right-click > Open on first launch
+4. If macOS still blocks the app, run this in Terminal:
+\`\`\`
+xattr -cr "/Applications/Auris Cue Sheets.app"
+\`\`\``;
   
   const body = `## Auris Cue Sheets v${version}
 
-${signedNote}
-
-### New Features
+### Added
 - **${features[0] || 'New Features'}**
 - **${features[1] || 'Improvements'}**
 - **${features[2] || 'Bug Fixes'}**
 
-### Installation
-1. Download the DMG file below (ARM64 for Apple Silicon Macs, x64 for Intel Macs)
-2. Open the DMG and drag Auris Cue Sheets to Applications
-3. Launch the app from Applications`;
+### Fixed
+${features.length > 3 ? features.slice(3).map(f => `- ${f}`).join('\n') : '- Bug fixes and stability improvements'}
+
+${installSteps}`;
 
   const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases`, {
     method: 'POST',

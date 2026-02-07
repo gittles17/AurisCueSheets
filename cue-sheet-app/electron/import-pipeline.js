@@ -13,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const sax = require('sax');
 const { XMLParser } = require('fast-xml-parser');
 
 // Premiere Pro ticks conversion (254016000000 ticks per second)
@@ -64,199 +65,313 @@ const BMG_CATALOG_MAP = {
 // ============================================================================
 // STEP 1: Parse Project XML - Extract raw clips from .prproj file
 // ============================================================================
+// Normalize file paths that may come from network drives or URL-encoded sources
+function normalizeFilePath(inputPath) {
+  let normalized = inputPath;
+  
+  // Convert file:// URLs to local paths
+  if (normalized.startsWith('file://')) {
+    try {
+      normalized = new URL(normalized).pathname;
+    } catch (e) {
+      normalized = normalized.replace('file://', '');
+    }
+  }
+  
+  // Convert smb:// URLs to /Volumes/ paths
+  // smb://server/share/path -> /Volumes/share/path
+  if (normalized.startsWith('smb://')) {
+    try {
+      const url = new URL(normalized);
+      const sharePath = url.pathname; // e.g. /share/path/to/file
+      normalized = '/Volumes' + sharePath;
+      console.log('[ImportPipeline] Converted SMB URL to:', normalized);
+    } catch (e) {
+      console.warn('[ImportPipeline] Failed to parse SMB URL:', normalized);
+    }
+  }
+  
+  // Decode URL-encoded characters (%20 -> space, etc.)
+  try {
+    normalized = decodeURIComponent(normalized);
+  } catch (e) {
+    // Already decoded or invalid encoding, leave as-is
+  }
+  
+  return normalized;
+}
+
+// Resolve a file path: normalize, search common locations
+function resolveFilePath(filePath) {
+  let resolvedPath = normalizeFilePath(filePath);
+  console.log('[ImportPipeline] Normalized path:', resolvedPath);
+  
+  if (!path.isAbsolute(resolvedPath) || !fs.existsSync(resolvedPath)) {
+    const fileName = path.basename(resolvedPath);
+    console.log('[ImportPipeline] File not found directly, searching common locations for:', fileName);
+    const home = process.env.HOME || '/Users/' + process.env.USER;
+    const possiblePaths = [
+      resolvedPath,
+      path.join(home, 'Desktop', fileName),
+      path.join(home, 'Downloads', fileName),
+      path.join(home, 'Documents', fileName),
+      path.join(home, 'Desktop/AurisCueSheets', fileName),
+    ];
+    
+    for (const tryPath of possiblePaths) {
+      console.log('[ImportPipeline] Trying:', tryPath);
+      if (fs.existsSync(tryPath)) {
+        resolvedPath = tryPath;
+        console.log('[ImportPipeline] Found file at:', resolvedPath);
+        return resolvedPath;
+      }
+    }
+    
+    console.log('[ImportPipeline] File not found in common locations. Needs user to locate it.');
+  }
+  
+  return resolvedPath;
+}
+
+// Stream-parse a .prproj file using SAX (handles files of any size)
 async function parseProjectXML(filePath) {
+  const startTime = Date.now();
+  console.log('[ImportPipeline] parseProjectXML called with:', filePath);
+  
+  const resolvedPath = resolveFilePath(filePath);
+  
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`File not found: ${filePath} (resolved to: ${resolvedPath}). If the file is on a network drive, try using File > Open instead of drag-and-drop, or copy the file locally first.`);
+  }
+  
   return new Promise((resolve, reject) => {
-    const startTime = Date.now();
+    // Data structures built during streaming parse
+    const pathsMap = new Map();
+    const subClipToClip = new Map();
+    const clipToName = new Map();
+    const clipDurations = new Map();
+    const allAudioFiles = new Set();
     
-    console.log('[ImportPipeline] parseProjectXML called with:', filePath);
+    // SAX parser state - strict mode to preserve tag name casing
+    const saxParser = sax.createStream(true, { trim: true });
+    const tagStack = [];
+    let currentText = '';
     
-    // Handle relative paths or just filenames - try common locations
-    let resolvedPath = filePath;
-    if (!path.isAbsolute(filePath)) {
-      console.log('[ImportPipeline] Path is not absolute, searching common locations...');
-      const home = process.env.HOME || '/Users/' + process.env.USER;
-      const possiblePaths = [
-        filePath,
-        path.join(home, 'Desktop', filePath),
-        path.join(home, 'Documents', filePath),
-        path.join(home, 'Desktop/AurisCueSheets', filePath),
-      ];
+    // Context trackers
+    let currentSubClipId = null;
+    let currentClipId = null;
+    let inAudioClipTrackItem = false;
+    let audioClipStart = null;
+    let audioClipEnd = null;
+    let audioClipSubClipRef = null;
+    
+    // Store raw audio clip placements for deferred resolution
+    // (SubClip/Clip definitions may appear AFTER AudioClipTrackItems in the XML)
+    const rawPlacements = [];
+    
+    // Helper to get attribute case-insensitively
+    function getAttr(attrs, name) {
+      return attrs[name] || attrs[name.toLowerCase()] || attrs[name.toUpperCase()] || null;
+    }
+    
+    saxParser.on('opentag', (node) => {
+      const tagName = node.name;
+      tagStack.push(tagName);
+      currentText = '';
       
-      for (const tryPath of possiblePaths) {
-        console.log('[ImportPipeline] Trying:', tryPath);
-        if (fs.existsSync(tryPath)) {
-          resolvedPath = tryPath;
-          console.log('[ImportPipeline] Found file at:', resolvedPath);
-          break;
+      // Track SubClip elements
+      if (tagName === 'SubClip') {
+        currentSubClipId = getAttr(node.attributes, 'ObjectID');
+      }
+      
+      // Clip inside SubClip -> build subClipToClip mapping
+      if (tagName === 'Clip' && currentSubClipId) {
+        const objRef = getAttr(node.attributes, 'ObjectRef');
+        if (objRef) {
+          subClipToClip.set(currentSubClipId, objRef);
         }
       }
-    }
-    
-    // Verify file exists
-    if (!fs.existsSync(resolvedPath)) {
-      reject(new Error(`File not found: ${filePath}`));
-      return;
-    }
-    
-    // Read the gzip-compressed file
-    const fileBuffer = fs.readFileSync(resolvedPath);
-    
-    zlib.gunzip(fileBuffer, async (err, decompressed) => {
-      if (err) {
-        reject(new Error('Failed to decompress project file: ' + err.message));
-        return;
+      
+      // Clip with ObjectID (top-level, not inside SubClip) -> track for name mapping
+      if (tagName === 'Clip' && !currentSubClipId) {
+        const objId = getAttr(node.attributes, 'ObjectID');
+        if (objId) {
+          currentClipId = objId;
+        }
       }
       
-      const xmlContent = decompressed.toString('utf-8');
+      // Track AudioClipTrackItem
+      if (tagName === 'AudioClipTrackItem') {
+        inAudioClipTrackItem = true;
+        audioClipStart = null;
+        audioClipEnd = null;
+        audioClipSubClipRef = null;
+      }
       
-      // Parse XML
-      const parser = new XMLParser({
-        ignoreAttributes: false,
-        attributeNamePrefix: '@_'
-      });
+      // SubClip ObjectRef inside AudioClipTrackItem
+      if (tagName === 'SubClip' && inAudioClipTrackItem) {
+        const objRef = getAttr(node.attributes, 'ObjectRef');
+        if (objRef) {
+          audioClipSubClipRef = objRef;
+        }
+      }
+    });
+    
+    saxParser.on('text', (text) => {
+      currentText += text;
+    });
+    
+    saxParser.on('cdata', (text) => {
+      currentText += text;
+    });
+    
+    saxParser.on('closetag', (tagName) => {
+      const text = currentText.trim();
       
-      try {
-        const parsed = parser.parse(xmlContent);
+      // ActualMediaFilePath -> pathsMap
+      if (tagName === 'ActualMediaFilePath' && text) {
+        const filename = path.basename(text);
+        pathsMap.set(filename, text);
+        const nameWithoutExt = filename.replace(/\.(wav|aif|aiff|mp3|m4a|flac)$/i, '');
+        pathsMap.set(nameWithoutExt, text);
+      }
+      
+      // Name element -> clip name mapping and audio file collection
+      if (tagName === 'Name' && text) {
+        // Map Clip ObjectID -> Name
+        if (currentClipId && !currentSubClipId && !inAudioClipTrackItem) {
+          clipToName.set(currentClipId, text);
+        }
+        // Also map SubClip ObjectID -> Name (SubClips contain audio names too)
+        if (currentSubClipId) {
+          clipToName.set(currentSubClipId, text);
+        }
+        // Collect audio file names
+        if (AUDIO_EXTENSIONS.some(ext => text.toLowerCase().endsWith(ext))) {
+          allAudioFiles.add(text);
+        }
+      }
+      
+      // Start/End inside AudioClipTrackItem
+      if (tagName === 'Start' && inAudioClipTrackItem && text) {
+        // Only set if not already set (first Start is the timeline position)
+        if (audioClipStart === null) {
+          audioClipStart = parseInt(text);
+        }
+      }
+      if (tagName === 'End' && inAudioClipTrackItem && text) {
+        if (audioClipEnd === null) {
+          audioClipEnd = parseInt(text);
+        }
+      }
+      
+      // Close SubClip
+      if (tagName === 'SubClip') {
+        if (!inAudioClipTrackItem) {
+          currentSubClipId = null;
+        }
+      }
+      
+      // Close Clip
+      if (tagName === 'Clip' && currentClipId && !currentSubClipId) {
+        currentClipId = null;
+      }
+      
+      // Close AudioClipTrackItem -> store placement for deferred resolution
+      if (tagName === 'AudioClipTrackItem' && inAudioClipTrackItem) {
+        if (audioClipStart !== null && audioClipEnd !== null && audioClipSubClipRef) {
+          rawPlacements.push({
+            start: audioClipStart,
+            end: audioClipEnd,
+            subClipRef: audioClipSubClipRef
+          });
+        }
+        inAudioClipTrackItem = false;
+        audioClipStart = null;
+        audioClipEnd = null;
+        audioClipSubClipRef = null;
+      }
+      
+      currentText = '';
+      tagStack.pop();
+    });
+    
+    saxParser.on('error', (err) => {
+      // SAX strict mode may error on malformed XML; continue parsing
+      console.warn('[ImportPipeline] SAX parse warning:', err.message);
+      saxParser._parser.error = null;
+      saxParser._parser.resume();
+    });
+    
+    saxParser.on('end', () => {
+      // Resolve deferred placements now that all SubClip/Clip maps are built
+      for (const placement of rawPlacements) {
+        const durationTicks = placement.end - placement.start;
+        const clipRef = subClipToClip.get(placement.subClipRef);
+        let clipName = clipRef ? clipToName.get(clipRef) : null;
+        if (!clipName) clipName = clipToName.get(placement.subClipRef);
         
-        // Extract file paths from the XML
-        const filePathsMap = extractMediaFilePaths(xmlContent);
+        if (clipName) {
+          const current = clipDurations.get(clipName) || { totalTicks: 0, instances: 0, maxTicks: 0 };
+          current.totalTicks += durationTicks;
+          current.instances++;
+          current.maxTicks = Math.max(current.maxTicks, durationTicks);
+          clipDurations.set(clipName, current);
+        }
+      }
+      
+      // Build final clips array
+      const clips = [];
+      for (const originalName of allAudioFiles) {
+        if (originalName === 'Root Bin' || originalName === 'Audio' || originalName === 'Balance' || 
+            originalName.startsWith('z') || originalName.includes('JUNK') || originalName.includes('OLD') ||
+            originalName.startsWith('*')) continue;
         
-        // Extract raw audio clips (just names and timings)
-        const rawClips = extractRawAudioClips(xmlContent);
-        const projectName = path.basename(filePath, '.prproj');
-        const spotTitle = parseSpotTitleFromFilename(projectName);
-        
-        const elapsed = Date.now() - startTime;
-        
-        resolve({
-          result: rawClips,
+        const durationData = clipDurations.get(originalName) || { totalTicks: 0, instances: 0, maxTicks: 0 };
+        clips.push({
+          id: `clip-${clips.length + 1}`,
+          originalName,
+          ticks: durationData.totalTicks,
+          maxTicks: durationData.maxTicks,
+          instances: durationData.instances
+        });
+      }
+      
+      const projectName = path.basename(filePath, '.prproj');
+      const spotTitle = parseSpotTitleFromFilename(projectName);
+      const elapsed = Date.now() - startTime;
+      
+      console.log(`[ImportPipeline] Streaming parse complete: ${clips.length} clips, ${pathsMap.size} paths in ${elapsed}ms`);
+      
+      resolve({
+        result: clips,
+        projectName,
+        spotTitle,
+        filePath,
+        filePathsMap: pathsMap,
+        xmlContent: null, // Not available in streaming mode (not needed)
+        summary: {
+          stepName: 'Parse Project XML (streaming)',
+          inputFile: filePath,
           projectName,
           spotTitle,
-          filePath,
-          filePathsMap,
-          xmlContent, // Keep for later steps if needed
-          summary: {
-            stepName: 'Parse Project XML',
-            inputFile: filePath,
-            projectName,
-            spotTitle,
-            totalClipsFound: rawClips.length,
-            mediaFilesFound: Math.floor(filePathsMap.size / 2), // Divided by 2 since we store with/without ext
-            elapsedMs: elapsed,
-            samples: rawClips.slice(0, 3).map(c => c.originalName)
-          }
-        });
-      } catch (parseError) {
-        reject(new Error('Failed to parse project XML: ' + parseError.message));
-      }
+          totalClipsFound: clips.length,
+          mediaFilesFound: Math.floor(pathsMap.size / 2),
+          elapsedMs: elapsed,
+          samples: clips.slice(0, 3).map(c => c.originalName)
+        }
+      });
     });
+    
+    // Stream: file -> gunzip -> SAX parser
+    const fileStream = fs.createReadStream(resolvedPath);
+    const gunzip = zlib.createGunzip();
+    
+    fileStream.on('error', (err) => reject(new Error('Failed to read project file: ' + err.message)));
+    gunzip.on('error', (err) => reject(new Error('Failed to decompress project file: ' + err.message)));
+    
+    fileStream.pipe(gunzip).pipe(saxParser);
   });
-}
-
-// Extract media file paths from prproj XML
-function extractMediaFilePaths(xmlContent) {
-  const pathsMap = new Map();
-  
-  const pathPattern = /<ActualMediaFilePath>([^<]+)<\/ActualMediaFilePath>/g;
-  let match;
-  
-  while ((match = pathPattern.exec(xmlContent)) !== null) {
-    const fullPath = match[1];
-    const filename = path.basename(fullPath);
-    pathsMap.set(filename, fullPath);
-    
-    // Also store without extension for fuzzy matching
-    const nameWithoutExt = filename.replace(/\.(wav|aif|aiff|mp3|m4a|flac)$/i, '');
-    pathsMap.set(nameWithoutExt, fullPath);
-  }
-  
-  return pathsMap;
-}
-
-// Extract raw audio clips with accurate timeline durations
-function extractRawAudioClips(xmlContent) {
-  const clips = [];
-  
-  // Step 1: Build SubClip ObjectID -> Clip ObjectRef map
-  const subClipToClip = new Map();
-  const subClipPattern = /<SubClip[^>]*ObjectID="(\d+)"[^>]*>[\s\S]*?<Clip ObjectRef="(\d+)"\/>/g;
-  let match;
-  while ((match = subClipPattern.exec(xmlContent)) !== null) {
-    subClipToClip.set(match[1], match[2]);
-  }
-  
-  // Step 2: Build Clip ObjectID -> Name map
-  const clipToName = new Map();
-  const clipNamePattern = /<Clip[^>]*ObjectID="(\d+)"[^>]*>[\s\S]*?<Name>([^<]+)<\/Name>/g;
-  while ((match = clipNamePattern.exec(xmlContent)) !== null) {
-    clipToName.set(match[1], match[2]);
-  }
-  
-  // Step 3: Extract timeline placements with durations
-  const audioClipPattern = /<AudioClipTrackItem[^>]*>[\s\S]*?<Start>(\d+)<\/Start>[\s\S]*?<End>(\d+)<\/End>[\s\S]*?<SubClip ObjectRef="(\d+)"[\s\S]*?<\/AudioClipTrackItem>/g;
-  
-  // Map: filename -> { totalTicks, instances }
-  const clipDurations = new Map();
-  
-  while ((match = audioClipPattern.exec(xmlContent)) !== null) {
-    const start = parseInt(match[1]);
-    const end = parseInt(match[2]);
-    const subClipRef = match[3];
-    const durationTicks = end - start;
-    
-    // Resolve to clip name
-    const clipRef = subClipToClip.get(subClipRef);
-    let clipName = clipRef ? clipToName.get(clipRef) : null;
-    
-    // Fallback: search for name near the SubClip reference
-    if (!clipName) {
-      const subClipArea = xmlContent.indexOf(`ObjectID="${subClipRef}"`);
-      if (subClipArea > 0) {
-        const nearbyXml = xmlContent.substring(subClipArea, subClipArea + 2000);
-        const nearbyName = nearbyXml.match(/<Name>([^<]+\.(wav|aif|aiff|mp3|m4a))<\/Name>/i);
-        if (nearbyName) clipName = nearbyName[1];
-      }
-    }
-    
-    if (clipName) {
-      const current = clipDurations.get(clipName) || { totalTicks: 0, instances: 0, maxTicks: 0 };
-      current.totalTicks += durationTicks;
-      current.instances++;
-      current.maxTicks = Math.max(current.maxTicks, durationTicks);
-      clipDurations.set(clipName, current);
-    }
-  }
-  
-  // Step 4: Also get all unique audio file names (for clips not on timeline)
-  const nameMatches = xmlContent.match(/<Name>([^<]+)<\/Name>/g) || [];
-  const allAudioFiles = new Set();
-  
-  for (const nameMatch of nameMatches) {
-    const name = nameMatch.replace(/<\/?Name>/g, '');
-    if (AUDIO_EXTENSIONS.some(ext => name.toLowerCase().endsWith(ext))) {
-      allAudioFiles.add(name);
-    }
-  }
-  
-  // Step 5: Create clips array with accurate durations
-  for (const originalName of allAudioFiles) {
-    // Skip obvious non-track names
-    if (originalName === 'Root Bin' || originalName === 'Audio' || originalName === 'Balance' || 
-        originalName.startsWith('z') || originalName.includes('JUNK') || originalName.includes('OLD') ||
-        originalName.startsWith('*')) continue;
-    
-    const durationData = clipDurations.get(originalName) || { totalTicks: 0, instances: 0, maxTicks: 0 };
-    
-    clips.push({
-      id: `clip-${clips.length + 1}`,
-      originalName,
-      ticks: durationData.totalTicks,  // Total duration on timeline
-      maxTicks: durationData.maxTicks,  // Longest single instance
-      instances: durationData.instances  // Number of times used
-    });
-  }
-  
-  return clips;
 }
 
 // Parse spot title from filename

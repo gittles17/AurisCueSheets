@@ -5,7 +5,14 @@
 const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { supabase, isConfigured } = require('./supabase-client');
+const { isConfigured } = require('./supabase-client');
+const { createClient } = require('@supabase/supabase-js');
+
+// Feedback uses a service-role client to bypass RLS,
+// since feedback is submitted by unauthenticated users.
+const SUPABASE_URL = 'https://sxvbidtnophfgkosfyej.supabase.co';
+const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4dmJpZHRub3BoZmdrb3NmeWVqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODgzNTIzMSwiZXhwIjoyMDg0NDExMjMxfQ.3_LM5N7sZrqoYWOcah0cgo61DY0_R9pEvs2A6aK8PPk';
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // Generate a unique device ID for anonymous users
 function getDeviceId() {

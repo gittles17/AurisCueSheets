@@ -2,6 +2,65 @@
 
 All notable changes to Auris Cue Sheets will be documented in this file.
 
+## [0.11.0] - February 2026
+
+### Added
+- **Apple Notarization** - App is now code-signed and notarized by Apple. Users can double-click to open without any Terminal workarounds.
+- **Feedback System Fix** - User feedback now reliably saves to the cloud and appears in the admin panel.
+
+### Changed
+- Release script automatically includes correct installation instructions based on whether the build is signed or unsigned.
+
+---
+
+## [0.10.0] - February 2026
+
+### Added
+- **Network Volume Search** - When a file isn't found locally, the app recursively searches all mounted volumes under /Volumes/ to find .prproj files on network drives
+
+### Fixed
+- Fixed exceljs crash on launch (pinned to v4.3.0 to resolve missing entry point in v4.4.0)
+- Improved error messages for file-not-found to suggest using File > Open or copying locally
+
+### Installation Note
+
+The app is not notarized, so macOS will block it on first launch. To fix this, run the following in Terminal after installing:
+
+```bash
+xattr -cr "/Applications/Auris Cue Sheets.app"
+```
+
+---
+
+## [0.9.0] - February 2026
+
+### Added
+- **SMB/Network Drive Support** - Import .prproj files directly from SMB and network drives without copying locally first
+- **Security-Scoped Bookmarks** - Persistent file access for network volumes through macOS security-scoped bookmarks
+- **Network Path Normalization** - Automatic handling of file://, smb://, and URL-encoded paths
+
+### Changed
+- Added network server and bookmark entitlements for macOS
+- File open dialog now supports security-scoped bookmarks for network files
+
+### Fixed
+- File not found error when importing .prproj files from network/SMB drives
+- Drop handler now uses URI list fallback when file.path is unavailable from network sources
+
+---
+
+## [0.8.0] - February 2026
+
+### Added
+- **Downloads Folder Import Support** - Import .prproj files dragged from the Downloads folder (previously only searched Desktop and Documents)
+- **Graceful Unsigned Builds** - afterPack.js detects if signing certificate is missing and builds unsigned instead of failing
+
+### Fixed
+- File not found error when importing .prproj files from Downloads
+- Build failure on machines without Apple signing certificate
+
+---
+
 ## [0.7.0] - January 2026
 
 ### Added
