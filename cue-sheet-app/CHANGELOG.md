@@ -2,6 +2,14 @@
 
 All notable changes to Auris Cue Sheets will be documented in this file.
 
+## [0.12.0] - February 2026
+
+### Added
+- **Open Project Supports .prproj** - The Open Project dialog now accepts both .acs and .prproj files. Selecting a Premiere Pro project triggers the Import Wizard automatically.
+- **Network Volume Browsing** - The Open Project file browser can now navigate to and open files from mounted server and network drives.
+
+---
+
 ## [0.11.0] - February 2026
 
 ### Added

@@ -9,10 +9,10 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.11';
+const VERSION = 'v0.12';
 const WHATS_NEW = [
-  { title: 'Apple Notarization', description: 'App is now signed and notarized by Apple. Just double-click to open.' },
-  { title: 'Feedback Fix', description: 'User feedback now reliably saves to the cloud and shows in the admin panel.' },
+  { title: 'Open Project + .prproj', description: 'Open Project now accepts both .acs and .prproj files.' },
+  { title: 'Network Volume Browsing', description: 'Open Project dialog can browse and open files from server drives.' },
 ];
 
 export default function LoginPage({ onLogin }) {
@@ -150,7 +150,7 @@ export default function LoginPage({ onLogin }) {
                 alt="Auris" 
                 className="logo"
               />
-              <p className="tagline">CUE SHEET INTELLIGENCE</p>
+              <p className="tagline">CUE SHEETS</p>
             </div>
 
             {/* Sign In Button or Form */}

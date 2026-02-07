@@ -2363,11 +2363,14 @@ ipcMain.handle('acs:newWithName', async (event, projectName) => {
 
 ipcMain.handle('acs:open', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Open Auris Project',
+    title: 'Open Project',
     filters: [
-      { name: 'Auris Cue Sheet', extensions: ['acs'] }
+      { name: 'All Supported Projects', extensions: ['acs', 'prproj'] },
+      { name: 'Auris Cue Sheet', extensions: ['acs'] },
+      { name: 'Premiere Pro Projects', extensions: ['prproj'] }
     ],
-    properties: ['openFile']
+    properties: ['openFile'],
+    securityScopedBookmarks: true
   });
   
   if (result.canceled || !result.filePaths.length) {
@@ -2375,10 +2378,26 @@ ipcMain.handle('acs:open', async () => {
   }
   
   const filePath = result.filePaths[0];
+  
+  // Handle security-scoped bookmarks for network files
+  if (result.bookmarks && result.bookmarks.length > 0) {
+    try {
+      const stopAccessing = app.startAccessingSecurityScopedResource(result.bookmarks[0]);
+      if (!global._scopedBookmarks) global._scopedBookmarks = [];
+      global._scopedBookmarks.push(stopAccessing);
+    } catch (err) {
+      console.warn('[Main] Failed to access security-scoped bookmark:', err.message);
+    }
+  }
+  
+  // Route based on file type
+  if (filePath.toLowerCase().endsWith('.prproj')) {
+    return { success: true, type: 'prproj', path: filePath };
+  }
+  
   const loadResult = acsProject.loadProject(filePath);
   
   if (loadResult.success) {
-    // Load the project data into the project store
     projectStore.loadFromACS(loadResult.data);
   }
   

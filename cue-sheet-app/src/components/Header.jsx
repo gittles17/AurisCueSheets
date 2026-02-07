@@ -11,6 +11,14 @@ import { useAuth } from '../contexts/AuthContext';
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
   {
+    version: 'v0.12',
+    date: 'February 2026',
+    features: [
+      { title: 'Open Project Supports .prproj', description: 'The Open Project dialog now accepts both .acs and .prproj files. Selecting a Premiere Pro project triggers the Import Wizard automatically.', icon: CheckCircle },
+      { title: 'Network Volume Browsing', description: 'The Open Project file browser can now navigate to and open files from mounted server and network drives using security-scoped bookmarks.', icon: CheckCircle },
+    ]
+  },
+  {
     version: 'v0.11',
     date: 'February 2026',
     features: [
@@ -596,7 +604,7 @@ function Header({
               
               <img src="./auris-logo-icon.png" alt="Auris" className="w-16 h-16 mx-auto mb-4" />
               <h1 className="text-2xl font-semibold text-auris-text mb-1">Auris</h1>
-              <p className="text-sm text-auris-text-muted">Cue Sheet Intelligence</p>
+              <p className="text-sm text-auris-text-muted">Cue Sheets</p>
               <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-auris-blue/10 rounded-full">
                 <span className="text-sm font-medium text-auris-blue">{CURRENT_VERSION}</span>
               </div>

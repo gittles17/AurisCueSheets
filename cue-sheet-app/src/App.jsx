@@ -928,21 +928,26 @@ function App() {
     if (window.electronAPI?.acsOpen) {
       const result = await window.electronAPI.acsOpen();
       if (result.success) {
-        // Reload projects from the loaded ACS data
+        // If a .prproj file was selected, route through import
+        if (result.type === 'prproj') {
+          await handleFileDrop(result.path);
+          return;
+        }
+        
+        // Otherwise load the .acs project
         const projectsData = await window.electronAPI.getProjects();
         setProjects(projectsData || []);
         setAcsFilePath(result.path);
         setProjectFolder(result.data.projectFolder || null);
         setAcsUnsavedChanges(false);
         
-        // Update recent projects
         const recent = await window.electronAPI.acsGetRecent();
         setRecentProjects(recent || []);
         
         showToast(`Opened "${result.data.name}"`, 'success');
       }
     }
-  }, [showToast]);
+  }, [showToast, handleFileDrop]);
 
   const handleOpenRecentProject = useCallback(async (filePath) => {
     if (window.electronAPI?.acsOpenPath) {
@@ -1612,7 +1617,7 @@ function App() {
                     className="h-12"
                   />
                   <p className="text-[10px] tracking-[0.25em] text-auris-text-muted/60 mt-2 uppercase">
-                    Cue Sheet Intelligence
+                    Cue Sheets
                   </p>
                 </div>
                 
