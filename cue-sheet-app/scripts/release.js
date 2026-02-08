@@ -157,38 +157,37 @@ function buildApp() {
 function generateLatestMacYml(version) {
   console.log('\n📄 Generating latest-mac.yml...');
   
-  const arm64DmgPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-arm64.dmg`);
-  const x64DmgPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-x64.dmg`);
+  // Auto-update uses ZIP files, not DMGs
+  const arm64ZipPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-arm64.zip`);
+  const x64ZipPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-x64.zip`);
   
-  // Check for ARM64 DMG (Apple Silicon)
-  if (!fs.existsSync(arm64DmgPath)) {
-    throw new Error(`ARM64 DMG not found: ${arm64DmgPath}`);
+  if (!fs.existsSync(arm64ZipPath)) {
+    throw new Error(`ARM64 ZIP not found: ${arm64ZipPath}`);
   }
   
-  const arm64Stats = fs.statSync(arm64DmgPath);
-  const arm64Sha512 = run(`shasum -a 512 "${arm64DmgPath}" | awk '{print $1}' | xxd -r -p | base64`, { silent: true }).trim();
+  const arm64Stats = fs.statSync(arm64ZipPath);
+  const arm64Sha512 = run(`shasum -a 512 "${arm64ZipPath}" | awk '{print $1}' | xxd -r -p | base64`, { silent: true }).trim();
   
   let yml = `version: ${version}.0
 files:
-  - url: Auris-Cue-Sheets-v${version}.0-arm64.dmg
+  - url: Auris-Cue-Sheets-v${version}.0-arm64-mac.zip
     sha512: ${arm64Sha512}
     size: ${arm64Stats.size}
     arch: arm64`;
   
-  // Check for x64 DMG (Intel)
-  if (fs.existsSync(x64DmgPath)) {
-    const x64Stats = fs.statSync(x64DmgPath);
-    const x64Sha512 = run(`shasum -a 512 "${x64DmgPath}" | awk '{print $1}' | xxd -r -p | base64`, { silent: true }).trim();
+  if (fs.existsSync(x64ZipPath)) {
+    const x64Stats = fs.statSync(x64ZipPath);
+    const x64Sha512 = run(`shasum -a 512 "${x64ZipPath}" | awk '{print $1}' | xxd -r -p | base64`, { silent: true }).trim();
     
     yml += `
-  - url: Auris-Cue-Sheets-v${version}.0-x64.dmg
+  - url: Auris-Cue-Sheets-v${version}.0-x64-mac.zip
     sha512: ${x64Sha512}
     size: ${x64Stats.size}
     arch: x64`;
   }
   
   yml += `
-path: Auris-Cue-Sheets-v${version}.0-arm64.dmg
+path: Auris-Cue-Sheets-v${version}.0-arm64-mac.zip
 sha512: ${arm64Sha512}
 releaseDate: '${new Date().toISOString()}'
 `;
@@ -336,14 +335,22 @@ Environment Variables:
       console.log('\n📎 Uploading release assets...');
       const arm64DmgPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-arm64.dmg`);
       const x64DmgPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-x64.dmg`);
+      const arm64ZipPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-arm64.zip`);
+      const x64ZipPath = path.join(DIST_DIR, `Auris Cue Sheets-v${version}.0-x64.zip`);
       const ymlPath = path.join(DIST_DIR, 'latest-mac.yml');
       
-      // Upload ARM64 DMG (Apple Silicon)
+      // Upload DMGs (for manual download)
       await uploadReleaseAsset(releaseId, arm64DmgPath, `Auris-Cue-Sheets-v${version}.0-arm64.dmg`);
-      
-      // Upload x64 DMG (Intel) if it exists
       if (fs.existsSync(x64DmgPath)) {
         await uploadReleaseAsset(releaseId, x64DmgPath, `Auris-Cue-Sheets-v${version}.0-x64.dmg`);
+      }
+      
+      // Upload ZIPs (for auto-update)
+      if (fs.existsSync(arm64ZipPath)) {
+        await uploadReleaseAsset(releaseId, arm64ZipPath, `Auris-Cue-Sheets-v${version}.0-arm64-mac.zip`);
+      }
+      if (fs.existsSync(x64ZipPath)) {
+        await uploadReleaseAsset(releaseId, x64ZipPath, `Auris-Cue-Sheets-v${version}.0-x64-mac.zip`);
       }
       
       await uploadReleaseAsset(releaseId, ymlPath, 'latest-mac.yml');
