@@ -152,16 +152,14 @@ function Header({
 }) {
   const { user, isAdmin, signOut, verifyAdminPassword, exitAdminMode, isConfigured } = useAuth();
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [showFileMenu, setShowFileMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [adminError, setAdminError] = useState('');
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
-  const [fileMenuPosition, setFileMenuPosition] = useState({ top: 0, left: 0 });
   const [userMenuPosition, setUserMenuPosition] = useState({ top: 0, left: 0 });
-  const fileButtonRef = useRef(null);
+  const exportButtonRef = useRef(null);
   const userButtonRef = useRef(null);
 
   const toggleUserMenu = () => {
@@ -199,19 +197,11 @@ function Header({
   };
 
   const toggleMenu = () => {
-    if (!showExportMenu && fileButtonRef.current) {
-      const rect = fileButtonRef.current.getBoundingClientRect();
+    if (!showExportMenu && exportButtonRef.current) {
+      const rect = exportButtonRef.current.getBoundingClientRect();
       setMenuPosition({ top: rect.bottom + 4, left: rect.left });
     }
     setShowExportMenu(!showExportMenu);
-  };
-
-  const toggleFileMenu = () => {
-    if (!showFileMenu && fileButtonRef.current) {
-      const rect = fileButtonRef.current.getBoundingClientRect();
-      setFileMenuPosition({ top: rect.bottom + 4, left: rect.left });
-    }
-    setShowFileMenu(!showFileMenu);
   };
 
   // Show .acs filename if available, otherwise fall back to project name
@@ -221,19 +211,9 @@ function Header({
 
   return (
     <header className="h-14 bg-auris-bg-secondary border-b border-auris-border flex items-center drag-region">
-      {/* Left: Traffic lights space + File menu */}
+      {/* Left: Traffic lights space */}
       <div className="flex items-center h-full">
         <div className="w-[72px] h-full drag-region flex-shrink-0" />
-        
-        <div className="flex items-center no-drag">
-          <button
-            ref={fileButtonRef}
-            onClick={toggleFileMenu}
-            className="px-2.5 py-1 text-sm text-auris-text-muted hover:text-auris-text hover:bg-auris-card rounded-md transition-colors"
-          >
-            File
-          </button>
-        </div>
       </div>
 
       {/* Center: Project name */}
@@ -333,104 +313,6 @@ function Header({
           </button>
         )}
       </div>
-
-      {/* File Menu Dropdown */}
-      {showFileMenu && createPortal(
-        <>
-          <div className="fixed inset-0 z-[999]" onClick={() => setShowFileMenu(false)} />
-          <div 
-            className="fixed bg-auris-card border border-auris-border rounded-xl shadow-modal z-[1000] py-1 min-w-[200px]"
-            style={{ top: fileMenuPosition.top, left: fileMenuPosition.left }}
-          >
-            <button
-              onClick={() => { setShowFileMenu(false); setShowAboutModal(true); }}
-              className="w-full px-3 py-2 text-left text-sm text-auris-text-secondary hover:bg-auris-card-hover hover:text-auris-text flex items-center gap-2.5 transition-colors"
-            >
-              <Info size={15} className="text-auris-text-muted" />
-              About Auris
-            </button>
-            <div className="h-px bg-auris-border my-1" />
-            <button
-              onClick={() => { setShowFileMenu(false); onNewProject?.(); }}
-              className="w-full px-3 py-2 text-left text-sm text-auris-text-secondary hover:bg-auris-card-hover hover:text-auris-text flex items-center gap-2.5 transition-colors"
-            >
-              <File size={15} className="text-auris-text-muted" />
-              New Project
-            </button>
-            <button
-              onClick={() => { setShowFileMenu(false); onOpenProject?.(); }}
-              className="w-full px-3 py-2 text-left text-sm text-auris-text-secondary hover:bg-auris-card-hover hover:text-auris-text flex items-center gap-2.5 transition-colors"
-            >
-              <FolderOpen size={15} className="text-auris-text-muted" />
-              Open...
-              <span className="ml-auto text-xs text-auris-text-muted">⌘O</span>
-            </button>
-            <div className="h-px bg-auris-border my-1" />
-            <button
-              onClick={() => { setShowFileMenu(false); onSaveProject?.(); }}
-              className="w-full px-3 py-2 text-left text-sm text-auris-text-secondary hover:bg-auris-card-hover hover:text-auris-text flex items-center gap-2.5 transition-colors"
-            >
-              <FloppyDisk size={15} className="text-auris-text-muted" />
-              Save
-              <span className="ml-auto text-xs text-auris-text-muted">⌘S</span>
-            </button>
-            <button
-              onClick={() => { setShowFileMenu(false); onSaveProjectAs?.(); }}
-              className="w-full px-3 py-2 text-left text-sm text-auris-text-secondary hover:bg-auris-card-hover hover:text-auris-text flex items-center gap-2.5 transition-colors"
-            >
-              <FloppyDisk size={15} className="text-auris-text-muted" />
-              Save As...
-              <span className="ml-auto text-xs text-auris-text-muted">⇧⌘S</span>
-            </button>
-            <div className="h-px bg-auris-border my-1" />
-            <button
-              onClick={() => { setShowFileMenu(false); toggleMenu(); }}
-              className="w-full px-3 py-2 text-left text-sm text-auris-text-secondary hover:bg-auris-card-hover hover:text-auris-text flex items-center gap-2.5 transition-colors"
-              data-tour="export-button"
-            >
-              <Export size={15} className="text-auris-text-muted" />
-              Export
-              <span className="ml-auto text-xs text-auris-text-muted">⌘E</span>
-            </button>
-            <button
-              onClick={() => { setShowFileMenu(false); onShare?.(); }}
-              className="w-full px-3 py-2 text-left text-sm text-auris-text-secondary hover:bg-auris-card-hover hover:text-auris-text flex items-center gap-2.5 transition-colors"
-            >
-              <ShareNetwork size={15} className="text-auris-text-muted" />
-              Share
-            </button>
-            <div className="h-px bg-auris-border my-1" />
-            <button
-              onClick={() => { setShowFileMenu(false); onOpenFeedback?.(); }}
-              className="w-full px-3 py-2 text-left text-sm text-auris-text-secondary hover:bg-auris-card-hover hover:text-auris-text flex items-center gap-2.5 transition-colors"
-            >
-              <ChatCircle size={15} className="text-auris-text-muted" />
-              Send Feedback
-            </button>
-            <button
-              onClick={() => { setShowFileMenu(false); onOpenSettings?.(); }}
-              className="w-full px-3 py-2 text-left text-sm text-auris-text-secondary hover:bg-auris-card-hover hover:text-auris-text flex items-center gap-2.5 transition-colors"
-            >
-              <Gear size={15} className="text-auris-text-muted" />
-              Settings
-              <span className="ml-auto text-xs text-auris-text-muted">⌘,</span>
-            </button>
-            {user && (
-              <>
-                <div className="h-px bg-auris-border my-1" />
-                <button
-                  onClick={() => { setShowFileMenu(false); signOut(); }}
-                  className="w-full px-3 py-2 text-left text-sm text-auris-red hover:bg-auris-card-hover flex items-center gap-2.5 transition-colors"
-                >
-                  <SignOut size={15} />
-                  Log Out
-                </button>
-              </>
-            )}
-          </div>
-        </>,
-        document.body
-      )}
 
       {/* Export Menu Dropdown */}
       {showExportMenu && createPortal(
