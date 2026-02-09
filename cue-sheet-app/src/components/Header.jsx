@@ -11,27 +11,12 @@ import { useAuth } from '../contexts/AuthContext';
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
   {
-    version: 'v0.16',
+    version: 'v0.13',
     date: 'February 2026',
     features: [
-      { title: 'Auto-Update Restart Fix', description: 'Completely bypassed Squirrel.Mac which fails on unsigned builds. The Restart button now manually extracts the update ZIP, swaps the app bundle, and relaunches.', icon: CheckCircle },
+      { title: 'Auto-Update Restart', description: 'Bypassed Squirrel.Mac which fails on unsigned builds. The Restart button now manually extracts the update ZIP, swaps the app bundle, removes quarantine, and relaunches.', icon: CheckCircle },
       { title: 'API Key Auto-Loading', description: 'The Anthropic API key is now pushed to the UI immediately after global keys are fetched from Supabase on authentication.', icon: CheckCircle },
-    ]
-  },
-  {
-    version: 'v0.15',
-    date: 'February 2026',
-    features: [
-      { title: 'Reliable Auto-Update Restart', description: 'The Restart button after downloading an update now uses app.relaunch() as a safety net so the app always reopens after installing an update on macOS.', icon: CheckCircle },
-      { title: 'API Key Auto-Loading', description: 'The Anthropic API key is now pushed to the UI immediately after global keys are fetched from Supabase on authentication. Previously required a manual refresh.', icon: CheckCircle },
-    ]
-  },
-  {
-    version: 'v0.14',
-    date: 'February 2026',
-    features: [
-      { title: 'Auto-Update Restart Fix', description: 'The Restart button after downloading an update now works reliably on macOS. Previously the app could stall because BrowserWindows were not destroyed before the quit-and-install sequence.', icon: CheckCircle },
-      { title: 'Delete Key Reliability', description: 'Delete/Backspace now reliably clears selected cells on the first keypress. Previously required multiple presses due to a focus management bug.', icon: CheckCircle },
+      { title: 'Delete Key Fix', description: 'Delete/Backspace now reliably clears selected cells on the first keypress. Previously required multiple presses due to a focus management bug.', icon: CheckCircle },
     ]
   },
   {
