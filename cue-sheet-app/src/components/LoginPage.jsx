@@ -9,9 +9,9 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.15';
+const VERSION = 'v0.16';
 const WHATS_NEW = [
-  { title: 'Reliable Auto-Update Restart', description: 'The Restart button after an update now always reopens the app on macOS.' },
+  { title: 'Auto-Update Restart Fix', description: 'Restart button now works reliably on unsigned macOS builds.' },
   { title: 'API Keys Load Automatically', description: 'API keys load automatically after sign-in without needing a manual refresh.' },
 ];
 

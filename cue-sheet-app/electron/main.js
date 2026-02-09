@@ -395,8 +395,11 @@ if (autoUpdater) {
     }
   });
 
+  let downloadedUpdateFile = null;
+
   autoUpdater.on('update-downloaded', (info) => {
-    console.log('[AutoUpdater] Update downloaded:', info.version);
+    downloadedUpdateFile = info.downloadedFile || null;
+    log.info('[AutoUpdater] Update downloaded:', info.version, 'file:', downloadedUpdateFile);
     if (mainWindow) {
       mainWindow.webContents.send('update-downloaded', info);
     }
@@ -436,14 +439,61 @@ ipcMain.handle('updater:check', async () => {
 ipcMain.handle('updater:install', () => {
   if (autoUpdater) {
     setImmediate(() => {
-      log.info('[AutoUpdater] Starting quitAndInstall...');
-      app.removeAllListeners('window-all-closed');
-      BrowserWindow.getAllWindows().forEach(w => w.destroy());
+      const fs = require('fs');
+      const os = require('os');
+      const { execSync } = require('child_process');
+
+      log.info('[AutoUpdater] Install requested, downloadedFile:', downloadedUpdateFile);
+
       try {
-        app.relaunch();
-        autoUpdater.quitAndInstall(false, true);
+        // 1. Find the downloaded ZIP
+        let zipPath = downloadedUpdateFile;
+        if (!zipPath || !fs.existsSync(zipPath)) {
+          log.error('[AutoUpdater] Downloaded update file not found:', zipPath);
+          return;
+        }
+
+        // 2. Get current .app path
+        const currentAppPath = app.getPath('exe').replace(/\/Contents\/MacOS\/.*$/, '');
+        log.info('[AutoUpdater] Current app path:', currentAppPath);
+
+        // 3. Extract ZIP to temp directory
+        const tempDir = path.join(os.tmpdir(), 'auris-update-' + Date.now());
+        execSync(`mkdir -p "${tempDir}"`);
+        execSync(`ditto -xk "${zipPath}" "${tempDir}"`);
+        log.info('[AutoUpdater] Extracted to:', tempDir);
+
+        // 4. Find the .app in extracted content
+        const items = fs.readdirSync(tempDir);
+        const appName = items.find(i => i.endsWith('.app'));
+        if (!appName) {
+          log.error('[AutoUpdater] No .app found in ZIP. Contents:', items);
+          execSync(`rm -rf "${tempDir}"`);
+          return;
+        }
+        const newAppPath = path.join(tempDir, appName);
+
+        // 5. Remove quarantine attributes
+        execSync(`xattr -cr "${newAppPath}"`);
+
+        // 6. Close all windows
+        app.removeAllListeners('window-all-closed');
+        BrowserWindow.getAllWindows().forEach(w => w.destroy());
+
+        // 7. Swap: current -> .bak, new -> current, delete .bak
+        const backupPath = currentAppPath + '.bak';
+        execSync(`rm -rf "${backupPath}"`);
+        execSync(`mv "${currentAppPath}" "${backupPath}"`);
+        execSync(`mv "${newAppPath}" "${currentAppPath}"`);
+        execSync(`rm -rf "${backupPath}" "${tempDir}"`);
+        log.info('[AutoUpdater] App swapped successfully');
+
+        // 8. Launch new app and exit
+        execSync(`open "${currentAppPath}"`);
+        app.exit(0);
+
       } catch (error) {
-        log.error('[AutoUpdater] quitAndInstall failed:', error);
+        log.error('[AutoUpdater] Manual install failed:', error);
         app.exit(0);
       }
     });

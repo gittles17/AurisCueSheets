@@ -11,6 +11,14 @@ import { useAuth } from '../contexts/AuthContext';
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
   {
+    version: 'v0.16',
+    date: 'February 2026',
+    features: [
+      { title: 'Auto-Update Restart Fix', description: 'Completely bypassed Squirrel.Mac which fails on unsigned builds. The Restart button now manually extracts the update ZIP, swaps the app bundle, and relaunches.', icon: CheckCircle },
+      { title: 'API Key Auto-Loading', description: 'The Anthropic API key is now pushed to the UI immediately after global keys are fetched from Supabase on authentication.', icon: CheckCircle },
+    ]
+  },
+  {
     version: 'v0.15',
     date: 'February 2026',
     features: [

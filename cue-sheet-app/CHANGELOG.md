@@ -2,6 +2,14 @@
 
 All notable changes to Auris Cue Sheets will be documented in this file.
 
+## [0.16.0] - February 2026
+
+### Fixed
+- **Auto-Update Restart (for real)** - Completely bypassed Squirrel.Mac, which silently fails on unsigned builds. The Restart button now manually extracts the downloaded ZIP, swaps the .app bundle, removes quarantine attributes, and relaunches. Verified with automated tests.
+- **API Key Auto-Loading After Sign-In** - The Anthropic API key is now pushed to the UI immediately after global keys are fetched from Supabase on authentication.
+
+---
+
 ## [0.15.0] - February 2026
 
 ### Fixed
