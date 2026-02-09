@@ -9,10 +9,9 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.12';
+const VERSION = 'v0.13';
 const WHATS_NEW = [
-  { title: 'Open Project + .prproj', description: 'Open Project now accepts both .acs and .prproj files.' },
-  { title: 'Network Volume Browsing', description: 'Open Project dialog can browse and open files from server drives.' },
+  { title: 'Delete Key Fix', description: 'Delete/Backspace now reliably clears selected cells on the first keypress.' },
 ];
 
 export default function LoginPage({ onLogin }) {

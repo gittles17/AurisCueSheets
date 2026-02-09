@@ -1,6 +1,6 @@
 {
   "name": "auris-cue-sheets",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "main": "electron/main.js",
   "description": "Cue sheet management app for music supervisors",
@@ -23,6 +23,12 @@
     "files": [
       "dist/**/*",
       "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": ".env"
+      }
     ],
     "mac": {
       "target": [

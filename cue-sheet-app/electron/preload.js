@@ -171,6 +171,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   
   // ==========================================
+  // Global API Keys (Supabase app_config)
+  // ==========================================
+  globalKeysFetch: () => ipcRenderer.invoke('globalKeys:fetch'),
+  globalKeysGet: () => ipcRenderer.invoke('globalKeys:get'),
+  globalKeysSet: (keyName, keyValue) => ipcRenderer.invoke('globalKeys:set', keyName, keyValue),
+  
+  // ==========================================
   // Cloud Data Sources (Admin-managed)
   // ==========================================
   cloudSourcesGet: () => ipcRenderer.invoke('cloudSources:getAll'),

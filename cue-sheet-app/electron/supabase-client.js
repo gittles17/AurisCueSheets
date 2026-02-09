@@ -189,6 +189,69 @@ function onAuthStateChange(callback) {
   return supabase.auth.onAuthStateChange(callback);
 }
 
+/**
+ * Fetch global API keys from the app_config table.
+ * Returns an object like { anthropic_api_key: '...', voyage_api_key: '...' }
+ */
+async function fetchGlobalKeys() {
+  if (!supabase) return {};
+  try {
+    const { data, error } = await supabase
+      .from('app_config')
+      .select('key, value')
+      .in('key', ['anthropic_api_key', 'voyage_api_key']);
+
+    if (error) {
+      console.error('[Supabase] Failed to fetch global keys:', error.message);
+      return {};
+    }
+
+    const keys = {};
+    for (const row of data || []) {
+      if (row.value) {
+        keys[row.key] = row.value;
+      }
+    }
+    console.log('[Supabase] Fetched global keys:', Object.keys(keys).length, 'configured');
+    return keys;
+  } catch (e) {
+    console.error('[Supabase] Error fetching global keys:', e.message);
+    return {};
+  }
+}
+
+/**
+ * Set a global key in the app_config table (admin only).
+ * @param {string} keyName - e.g. 'anthropic_api_key'
+ * @param {string} keyValue - the API key value
+ */
+async function setGlobalKey(keyName, keyValue) {
+  if (!supabase) {
+    return { success: false, error: 'Supabase not configured' };
+  }
+  if (!isAdminSession) {
+    return { success: false, error: 'Admin access required' };
+  }
+  try {
+    const { error } = await supabase
+      .from('app_config')
+      .upsert(
+        { key: keyName, value: keyValue, updated_at: new Date().toISOString() },
+        { onConflict: 'key' }
+      );
+
+    if (error) {
+      console.error('[Supabase] Failed to set global key:', error.message);
+      return { success: false, error: error.message };
+    }
+    console.log('[Supabase] Global key updated:', keyName);
+    return { success: true };
+  } catch (e) {
+    console.error('[Supabase] Error setting global key:', e.message);
+    return { success: false, error: e.message };
+  }
+}
+
 module.exports = {
   supabase,
   isConfigured,
@@ -201,5 +264,7 @@ module.exports = {
   isAdmin,
   verifyAdminPassword,
   exitAdminMode,
-  onAuthStateChange
+  onAuthStateChange,
+  fetchGlobalKeys,
+  setGlobalKey
 };

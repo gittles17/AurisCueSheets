@@ -11,6 +11,13 @@ import { useAuth } from '../contexts/AuthContext';
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
   {
+    version: 'v0.13',
+    date: 'February 2026',
+    features: [
+      { title: 'Delete Key Reliability', description: 'Delete/Backspace now reliably clears selected cells on the first keypress. Previously required multiple presses due to a focus management bug that prevented keyboard focus from reaching the table after cell selection.', icon: CheckCircle },
+    ]
+  },
+  {
     version: 'v0.12',
     date: 'February 2026',
     features: [

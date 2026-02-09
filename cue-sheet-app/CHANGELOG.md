@@ -2,6 +2,13 @@
 
 All notable changes to Auris Cue Sheets will be documented in this file.
 
+## [0.13.0] - February 2026
+
+### Fixed
+- **Delete Key Reliability** - Delete/Backspace now reliably clears selected cells on the first keypress. Previously required multiple presses due to a focus management bug where `event.preventDefault()` blocked keyboard focus from reaching the table.
+
+---
+
 ## [0.12.0] - February 2026
 
 ### Added

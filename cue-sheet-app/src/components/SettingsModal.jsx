@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Database, Gear, Info, X, CircleNotch, Eye, EyeSlash, Check, Table, Trash, MagnifyingGlass, Warning, ChatCircle, Pencil, Lightning, Brain } from '@phosphor-icons/react';
+import { Database, Gear, Info, X, CircleNotch, Eye, EyeSlash, Check, Table, Trash, MagnifyingGlass, Warning, ChatCircle, Pencil, Lightning, Brain, Buildings } from '@phosphor-icons/react';
 import SourcesPanel from './SourcesPanel';
 import AddSourceModal from './AddSourceModal';
 import AdminFeedbackPanel from './AdminFeedbackPanel';
@@ -41,6 +41,15 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
   // Edit track modal state
   const [showEditTrackModal, setShowEditTrackModal] = useState(false);
   const [editingTrack, setEditingTrack] = useState(null);
+  
+  // Global keys (admin) state
+  const [globalAnthropicKey, setGlobalAnthropicKey] = useState('');
+  const [globalVoyageKey, setGlobalVoyageKey] = useState('');
+  const [showGlobalAnthropicKey, setShowGlobalAnthropicKey] = useState(false);
+  const [showGlobalVoyageKey, setShowGlobalVoyageKey] = useState(false);
+  const [globalKeySaving, setGlobalKeySaving] = useState(null);
+  const [globalKeySaved, setGlobalKeySaved] = useState(null);
+  const [isLoadingGlobalKeys, setIsLoadingGlobalKeys] = useState(false);
   
   // Patterns tab state
   const [patterns, setPatterns] = useState([]);
@@ -83,6 +92,23 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
     }
   }, [isOpen, activeTab]);
 
+  // Load global keys when admin views General tab
+  useEffect(() => {
+    if (isOpen && isAdmin && activeTab === 'general' && window.electronAPI?.globalKeysGet) {
+      setIsLoadingGlobalKeys(true);
+      window.electronAPI.globalKeysFetch().then(keys => {
+        if (keys.anthropic_api_key) setGlobalAnthropicKey(keys.anthropic_api_key);
+        if (keys.voyage_api_key) setGlobalVoyageKey(keys.voyage_api_key);
+      }).catch(() => {
+        // Fall back to cached local keys
+        window.electronAPI.globalKeysGet().then(keys => {
+          if (keys.anthropic_api_key) setGlobalAnthropicKey(keys.anthropic_api_key);
+          if (keys.voyage_api_key) setGlobalVoyageKey(keys.voyage_api_key);
+        });
+      }).finally(() => setIsLoadingGlobalKeys(false));
+    }
+  }, [isOpen, isAdmin, activeTab]);
+  
   // Load learned tracks from cloud (single source of truth)
   const loadLearnedTracks = useCallback(async (search = '') => {
     setIsLoadingTracks(true);
@@ -344,6 +370,26 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
     setIsEmbedding(false);
   };
 
+  const handleSaveGlobalKey = async (keyName, keyValue) => {
+    if (!window.electronAPI?.globalKeysSet) return;
+    setGlobalKeySaving(keyName);
+    try {
+      const result = await window.electronAPI.globalKeysSet(keyName, keyValue);
+      if (result.success) {
+        // Re-fetch so sources-manager picks up the new key
+        await window.electronAPI.globalKeysFetch();
+        const updatedSources = await window.electronAPI.getSources();
+        onUpdateSources?.(updatedSources);
+        setGlobalKeySaved(keyName);
+        setTimeout(() => setGlobalKeySaved(null), 2000);
+      }
+    } catch (e) {
+      console.error('Failed to save global key:', e);
+    } finally {
+      setGlobalKeySaving(null);
+    }
+  };
+
   const getConfigFields = (sourceId) => {
     switch (sourceId) {
       case 'opus':
@@ -599,6 +645,101 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
                       </div>
                     )}
                   </div>
+                  
+                  {/* Organization API Keys - Admin only */}
+                  {isAdmin && (
+                    <div className="bg-auris-card/50 rounded-lg p-4 border border-purple-500/30 mt-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Buildings size={16} className="text-purple-400" />
+                        <h3 className="text-sm font-medium text-purple-300">Organization API Keys</h3>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 ml-auto">Admin</span>
+                      </div>
+                      <p className="text-xs text-auris-text-muted mb-4">
+                        These keys are shared with all users in the organization via Supabase.
+                        Individual user keys (above) take priority if set.
+                      </p>
+                      
+                      {isLoadingGlobalKeys ? (
+                        <div className="flex items-center justify-center py-4">
+                          <CircleNotch size={16} className="text-purple-400 animate-spin" />
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {/* Global Anthropic Key */}
+                          <div>
+                            <label className="block text-xs text-auris-text-secondary mb-1">Claude API Key (all users)</label>
+                            <div className="flex gap-2">
+                              <div className="relative flex-1">
+                                <input
+                                  type={showGlobalAnthropicKey ? 'text' : 'password'}
+                                  value={globalAnthropicKey}
+                                  onChange={(e) => setGlobalAnthropicKey(e.target.value)}
+                                  placeholder="sk-ant-api03-..."
+                                  className="input w-full pr-8 font-mono text-xs py-2"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowGlobalAnthropicKey(!showGlobalAnthropicKey)}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-auris-text-muted hover:text-auris-text transition-colors"
+                                >
+                                  {showGlobalAnthropicKey ? <EyeSlash size={14} /> : <Eye size={14} />}
+                                </button>
+                              </div>
+                              <button
+                                onClick={() => handleSaveGlobalKey('anthropic_api_key', globalAnthropicKey)}
+                                className="btn btn-primary px-3 py-2 text-xs"
+                                disabled={!globalAnthropicKey || globalKeySaving === 'anthropic_api_key'}
+                              >
+                                {globalKeySaving === 'anthropic_api_key' ? (
+                                  <CircleNotch size={14} className="animate-spin" />
+                                ) : globalKeySaved === 'anthropic_api_key' ? (
+                                  <span className="flex items-center gap-1"><Check size={14} weight="bold" /> Saved</span>
+                                ) : (
+                                  'Save'
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                          
+                          {/* Global Voyage Key */}
+                          <div>
+                            <label className="block text-xs text-auris-text-secondary mb-1">Voyage AI Key (all users)</label>
+                            <div className="flex gap-2">
+                              <div className="relative flex-1">
+                                <input
+                                  type={showGlobalVoyageKey ? 'text' : 'password'}
+                                  value={globalVoyageKey}
+                                  onChange={(e) => setGlobalVoyageKey(e.target.value)}
+                                  placeholder="pa-..."
+                                  className="input w-full pr-8 font-mono text-xs py-2"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowGlobalVoyageKey(!showGlobalVoyageKey)}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-auris-text-muted hover:text-auris-text transition-colors"
+                                >
+                                  {showGlobalVoyageKey ? <EyeSlash size={14} /> : <Eye size={14} />}
+                                </button>
+                              </div>
+                              <button
+                                onClick={() => handleSaveGlobalKey('voyage_api_key', globalVoyageKey)}
+                                className="btn btn-primary px-3 py-2 text-xs"
+                                disabled={!globalVoyageKey || globalKeySaving === 'voyage_api_key'}
+                              >
+                                {globalKeySaving === 'voyage_api_key' ? (
+                                  <CircleNotch size={14} className="animate-spin" />
+                                ) : globalKeySaved === 'voyage_api_key' ? (
+                                  <span className="flex items-center gap-1"><Check size={14} weight="bold" /> Saved</span>
+                                ) : (
+                                  'Save'
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

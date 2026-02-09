@@ -238,12 +238,12 @@ function createApplicationMenu() {
           label: 'Export',
           submenu: [
             {
-              label: 'Export to Excel...',
+              label: 'Excel...',
               accelerator: 'CmdOrCtrl+E',
               click: () => mainWindow?.webContents.send('menu-action', 'export-xlsx')
             },
             {
-              label: 'Export to PDF...',
+              label: 'PDF...',
               click: () => mainWindow?.webContents.send('menu-action', 'export-pdf')
             }
           ]
@@ -3210,13 +3210,50 @@ ipcMain.handle('auth:exitAdminMode', async () => {
 
 // Set up auth state change listener
 if (supabaseClient.isConfigured()) {
-  supabaseClient.onAuthStateChange((event, session) => {
+  supabaseClient.onAuthStateChange(async (event, session) => {
     console.log('[Auth] State change:', event);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('auth:stateChange', { event, session });
     }
+
+    // Fetch global API keys from Supabase after sign-in or session restore
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || (event === 'INITIAL_SESSION' && session)) {
+      try {
+        const keys = await supabaseClient.fetchGlobalKeys();
+        if (Object.keys(keys).length > 0) {
+          sourcesManager.setGlobalKeys(keys);
+          console.log('[Auth] Global API keys loaded from Supabase');
+        }
+      } catch (e) {
+        console.log('[Auth] Could not fetch global keys:', e.message);
+      }
+    }
   });
 }
+
+// ==========================================
+// Global API Keys IPC Handlers
+// ==========================================
+
+ipcMain.handle('globalKeys:fetch', async () => {
+  try {
+    const keys = await supabaseClient.fetchGlobalKeys();
+    if (Object.keys(keys).length > 0) {
+      sourcesManager.setGlobalKeys(keys);
+    }
+    return keys;
+  } catch (error) {
+    return {};
+  }
+});
+
+ipcMain.handle('globalKeys:get', () => {
+  return sourcesManager.getGlobalKeys();
+});
+
+ipcMain.handle('globalKeys:set', async (event, keyName, keyValue) => {
+  return await supabaseClient.setGlobalKey(keyName, keyValue);
+});
 
 // ==========================================
 // Cloud Data Sources IPC Handlers

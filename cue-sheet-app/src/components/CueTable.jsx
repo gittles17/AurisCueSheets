@@ -485,8 +485,20 @@ function CueTable({
     
     // Don't select on non-selectable columns
     if (!columns[colIndex]?.selectable) return;
+
+    // Don't interfere with cursor placement inside an editing input
+    if (event.target.tagName === 'INPUT' && event.target.closest('[data-cell]')) {
+      return;
+    }
     
     event.preventDefault(); // Prevent browser text selection
+
+    // Close any editing cell (triggers onBlur/save) and move focus from external inputs
+    // so that keyboard shortcuts (Delete/Backspace) target the table, not a stale input
+    if (document.activeElement && document.activeElement !== tableRef.current) {
+      document.activeElement.blur();
+    }
+    tableRef.current?.focus();
     
     if (event.shiftKey && anchorCell) {
       // Shift+click: extend selection from anchor
@@ -1060,7 +1072,7 @@ function CueTable({
   const selectedRowCount = bounds ? bounds.maxRow - bounds.minRow + 1 : 0;
 
   return (
-    <div className="flex-1 overflow-hidden flex flex-col relative" ref={tableRef}>
+    <div className="flex-1 overflow-hidden flex flex-col relative outline-none" ref={tableRef} tabIndex={-1}>
       {/* Scrollable Table Container */}
       <div 
         ref={scrollContainerRef}
