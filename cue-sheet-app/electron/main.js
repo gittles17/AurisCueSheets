@@ -435,11 +435,15 @@ ipcMain.handle('updater:check', async () => {
 
 ipcMain.handle('updater:install', () => {
   if (autoUpdater) {
-    // On macOS, we need to quit the app and let the update installer handle restart
-    // Setting isSilent=false and isForceRunAfter=true
     setImmediate(() => {
       app.removeAllListeners('window-all-closed');
-      autoUpdater.quitAndInstall(false, true);
+      BrowserWindow.getAllWindows().forEach(w => w.destroy());
+      try {
+        autoUpdater.quitAndInstall(false, true);
+      } catch (error) {
+        log.error('[AutoUpdater] quitAndInstall failed:', error);
+        app.quit();
+      }
     });
   }
 });

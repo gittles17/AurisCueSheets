@@ -2,6 +2,13 @@
 
 All notable changes to Auris Cue Sheets will be documented in this file.
 
+## [0.14.0] - February 2026
+
+### Fixed
+- **Auto-Update Restart** - The "Restart" button after downloading an update now works reliably on macOS. Previously the app could stall because BrowserWindows weren't destroyed before quit.
+
+---
+
 ## [0.13.0] - February 2026
 
 ### Fixed

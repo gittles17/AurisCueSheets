@@ -9,8 +9,9 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.13';
+const VERSION = 'v0.14';
 const WHATS_NEW = [
+  { title: 'Auto-Update Restart Fix', description: 'The Restart button after downloading an update now works reliably on macOS.' },
   { title: 'Delete Key Fix', description: 'Delete/Backspace now reliably clears selected cells on the first keypress.' },
 ];
 
