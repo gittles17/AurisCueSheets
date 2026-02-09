@@ -368,6 +368,8 @@ function createApplicationMenu() {
 // =============================================
 // Auto-Updater Configuration (only in production)
 // =============================================
+let downloadedUpdateFile = null;
+
 if (autoUpdater) {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -394,8 +396,6 @@ if (autoUpdater) {
       mainWindow.webContents.send('update-download-progress', progress);
     }
   });
-
-  let downloadedUpdateFile = null;
 
   autoUpdater.on('update-downloaded', (info) => {
     downloadedUpdateFile = info.downloadedFile || null;
@@ -443,9 +443,8 @@ ipcMain.handle('updater:install', () => {
       const os = require('os');
       const { execSync } = require('child_process');
 
-      log.info('[AutoUpdater] Install requested, downloadedFile:', downloadedUpdateFile);
-
       try {
+        log.info('[AutoUpdater] Install requested, downloadedFile:', downloadedUpdateFile);
         // 1. Find the downloaded ZIP
         let zipPath = downloadedUpdateFile;
         if (!zipPath || !fs.existsSync(zipPath)) {
