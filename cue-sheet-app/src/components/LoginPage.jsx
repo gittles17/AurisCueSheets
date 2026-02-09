@@ -9,10 +9,10 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.14';
+const VERSION = 'v0.15';
 const WHATS_NEW = [
-  { title: 'Auto-Update Restart Fix', description: 'The Restart button after downloading an update now works reliably on macOS.' },
-  { title: 'Delete Key Fix', description: 'Delete/Backspace now reliably clears selected cells on the first keypress.' },
+  { title: 'Reliable Auto-Update Restart', description: 'The Restart button after an update now always reopens the app on macOS.' },
+  { title: 'API Keys Load Automatically', description: 'API keys load automatically after sign-in without needing a manual refresh.' },
 ];
 
 export default function LoginPage({ onLogin }) {

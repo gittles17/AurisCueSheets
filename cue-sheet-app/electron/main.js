@@ -436,13 +436,15 @@ ipcMain.handle('updater:check', async () => {
 ipcMain.handle('updater:install', () => {
   if (autoUpdater) {
     setImmediate(() => {
+      log.info('[AutoUpdater] Starting quitAndInstall...');
       app.removeAllListeners('window-all-closed');
       BrowserWindow.getAllWindows().forEach(w => w.destroy());
       try {
+        app.relaunch();
         autoUpdater.quitAndInstall(false, true);
       } catch (error) {
         log.error('[AutoUpdater] quitAndInstall failed:', error);
-        app.quit();
+        app.exit(0);
       }
     });
   }
@@ -3226,7 +3228,13 @@ if (supabaseClient.isConfigured()) {
         const keys = await supabaseClient.fetchGlobalKeys();
         if (Object.keys(keys).length > 0) {
           sourcesManager.setGlobalKeys(keys);
-          console.log('[Auth] Global API keys loaded from Supabase');
+          log.info('[Auth] Global API keys loaded from Supabase');
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cloudSources:change', {
+              type: 'globalKeysUpdated',
+              allSources: sourcesManager.getAllSources()
+            });
+          }
         }
       } catch (e) {
         console.log('[Auth] Could not fetch global keys:', e.message);

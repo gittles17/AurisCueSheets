@@ -2,6 +2,14 @@
 
 All notable changes to Auris Cue Sheets will be documented in this file.
 
+## [0.15.0] - February 2026
+
+### Fixed
+- **Reliable Auto-Update Restart** - The "Restart" button after downloading an update now uses `app.relaunch()` as a safety net so the app always reopens after installing an update on macOS.
+- **API Key Auto-Loading After Sign-In** - The Anthropic API key is now pushed to the UI immediately after global keys are fetched from Supabase on authentication. Previously required a manual refresh.
+
+---
+
 ## [0.14.0] - February 2026
 
 ### Fixed
