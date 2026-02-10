@@ -172,11 +172,65 @@ export default function ImportWizard({ isOpen, onClose, onComplete, projectPath 
     }
   };
 
+  // Re-run stem grouping on the frontend using categorized data
+  // This ensures manually-changed categories (e.g. marking a clip as 'stem') are respected
+  const regroupFromCategorized = useCallback(() => {
+    setPipelineData(prev => {
+      if (!prev.categorized) return prev;
+
+      const clips = prev.categorized.filter(c => !c.excluded);
+      const mainCues = clips.filter(c => c.cueType !== 'stem');
+      const stems = clips.filter(c => c.cueType === 'stem');
+
+      // Group stems by baseTrackName
+      const stemGroups = new Map();
+      for (const stem of stems) {
+        const key = stem.baseTrackName;
+        if (!stemGroups.has(key)) stemGroups.set(key, []);
+        stemGroups.get(key).push(stem);
+      }
+
+      const grouped = mainCues.map(cue => ({ ...cue, stems: [] }));
+
+      for (const [baseName, groupedStems] of stemGroups) {
+        const parent = grouped.find(r => r.baseTrackName === baseName);
+        if (parent) {
+          parent.stems = groupedStems;
+          parent.stemDurationAbsorbed = true;
+        } else {
+          // Create synthetic parent from stems
+          const first = groupedStems[0];
+          grouped.push({
+            ...first,
+            cueType: 'main',
+            trackName: first.displayName || first.trackName,
+            isSynthetic: true,
+            stemDurationAbsorbed: true,
+            stems: groupedStems,
+          });
+        }
+      }
+
+      // Re-add excluded clips so they remain in the data (just hidden)
+      const excludedClips = prev.categorized.filter(c => c.excluded).map(c => ({ ...c, stems: [] }));
+
+      return {
+        ...prev,
+        grouped: [...grouped, ...excludedClips],
+        final: [...grouped, ...excludedClips],
+      };
+    });
+  }, []);
+
   const handleNext = useCallback(() => {
     if (currentStep < STEPS.length - 1) {
+      // When advancing from Categorization (1) to Stem Grouping (2), re-run grouping
+      if (currentStep === 1) {
+        regroupFromCategorized();
+      }
       setCurrentStep(prev => prev + 1);
     }
-  }, [currentStep]);
+  }, [currentStep, regroupFromCategorized]);
 
   const handleBack = useCallback(() => {
     if (currentStep > 0) {
@@ -241,12 +295,18 @@ export default function ImportWizard({ isOpen, onClose, onComplete, projectPath 
 
   // Toggle clip inclusion (Step 1)
   const toggleClipExclusion = useCallback((clipId, currentlyExcluded) => {
-    setPipelineData(prev => ({
-      ...prev,
-      raw: prev.raw.map(clip => 
+    setPipelineData(prev => {
+      const toggle = clips => clips?.map(clip =>
         clip.id === clipId ? { ...clip, excluded: !currentlyExcluded } : clip
-      ),
-    }));
+      );
+      return {
+        ...prev,
+        raw: toggle(prev.raw),
+        categorized: toggle(prev.categorized),
+        grouped: toggle(prev.grouped),
+        final: toggle(prev.final),
+      };
+    });
     
     // Track modification for learning
     setModifications(prev => {

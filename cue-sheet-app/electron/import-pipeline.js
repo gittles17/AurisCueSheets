@@ -1014,19 +1014,32 @@ function groupStems(clips) {
       const longestStemTicks = Math.max(...groupStems.map(s => s.ticks || 0));
       if (longestStemTicks > (existingParent.ticks || 0)) {
         existingParent.ticks = longestStemTicks;
+        // Recalculate formatted duration from ticks
+        const totalSeconds = longestStemTicks / 254016000000;
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = Math.floor(totalSeconds % 60);
+        existingParent.duration = `${mins}:${secs.toString().padStart(2, '0')}`;
+        existingParent.durationSeconds = totalSeconds;
       }
+      existingParent.stemDurationAbsorbed = true;
       linkedStems += groupStems.length;
     } else {
       // No parent exists - create a synthetic main cue from the first stem
       const firstStem = groupStems[0];
       // Use longest stem duration (stems play simultaneously)
       const longestStemTicks = Math.max(...groupStems.map(s => s.ticks || 0));
+      const totalSeconds = longestStemTicks / 254016000000;
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = Math.floor(totalSeconds % 60);
       const syntheticParent = {
         ...firstStem,
         cueType: 'main',
-        trackName: firstStem.displayName, // Use the clean display name
-        isSynthetic: true, // Flag that this was created from stems
-        ticks: longestStemTicks, // Duration = longest stem
+        trackName: firstStem.displayName,
+        isSynthetic: true,
+        ticks: longestStemTicks,
+        duration: `${mins}:${secs.toString().padStart(2, '0')}`,
+        durationSeconds: totalSeconds,
+        stemDurationAbsorbed: true,
         stems: groupStems
       };
       result.push(syntheticParent);

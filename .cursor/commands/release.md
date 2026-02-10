@@ -15,3 +15,5 @@ Output directory: /tmp/auris-build/
 
 Required: GH_TOKEN environment variable
 Optional: APPLE_ID, APPLE_APP_PASSWORD, APPLE_TEAM_ID for notarization
+
+reun with parallelization

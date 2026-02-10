@@ -2,6 +2,15 @@
 
 All notable changes to Auris Cue Sheets will be documented in this file.
 
+## [0.14.0] - February 2026
+
+### Fixed
+- **Excel Export: Master/Label/Library** - The Master/Record Label/Music Library column now correctly exports to Excel. Previously used the wrong data field.
+- **Import Wizard: Exclusion** - Items marked for removal in Step 1 are now properly excluded from the final import. Previously, exclusions didn't propagate to the final output.
+- **Import Wizard: Stem Combining** - Stems are now properly grouped and their durations combined when advancing through the import wizard. Previously, manually-categorized stems remained as separate entries.
+
+---
+
 ## [0.13.0] - February 2026
 
 ### Fixed

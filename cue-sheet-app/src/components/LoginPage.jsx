@@ -9,11 +9,11 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.13';
+const VERSION = 'v0.14';
 const WHATS_NEW = [
-  { title: 'Auto-Update Restart', description: 'Restart button now works reliably on unsigned macOS builds.' },
-  { title: 'API Keys Load Automatically', description: 'API keys load automatically after sign-in.' },
-  { title: 'Delete Key Fix', description: 'Delete/Backspace clears selected cells on the first keypress.' },
+  { title: 'Excel Export Fix', description: 'Master/Label/Library column now exports correctly.' },
+  { title: 'Import Exclusion Fix', description: 'Removed items stay removed through the entire import.' },
+  { title: 'Stem Combining', description: 'Stems are properly grouped with combined durations on import.' },
 ];
 
 export default function LoginPage({ onLogin }) {

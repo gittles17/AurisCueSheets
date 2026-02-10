@@ -11,6 +11,15 @@ import { useAuth } from '../contexts/AuthContext';
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
   {
+    version: 'v0.14',
+    date: 'February 2026',
+    features: [
+      { title: 'Excel Export Fix', description: 'The Master/Record Label/Music Library column now correctly exports to Excel. Previously the wrong data field was used, leaving the column blank.', icon: CheckCircle },
+      { title: 'Import Exclusion Fix', description: 'Items marked for removal in the Import Wizard are now properly excluded from the final import. Previously, exclusions in Step 1 did not propagate to later steps.', icon: CheckCircle },
+      { title: 'Stem Combining', description: 'Stems are now properly grouped and their durations combined when advancing through the Import Wizard. Manually-categorized stems no longer remain as separate entries.', icon: CheckCircle },
+    ]
+  },
+  {
     version: 'v0.13',
     date: 'February 2026',
     features: [

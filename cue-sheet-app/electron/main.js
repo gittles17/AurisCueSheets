@@ -2081,10 +2081,10 @@ async function exportToExcel(filePath, cues, projectInfo) {
     // Publisher
     sheet.getCell(row, 8).value = cue.publisher || '';
     
-    // Master/Contact - format with line breaks like in the CSV
-    let masterContact = cue.masterContact || '';
-    if (masterContact) {
-      sheet.getCell(row, 9).value = masterContact;
+    // Master/Record Label/Music Library
+    let masterLabel = cue.label || cue.library || cue.masterContact || '';
+    if (masterLabel) {
+      sheet.getCell(row, 9).value = masterLabel;
       sheet.getCell(row, 9).alignment = { wrapText: true };
     }
     
