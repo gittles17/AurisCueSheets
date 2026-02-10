@@ -488,8 +488,10 @@ ipcMain.handle('updater:install', () => {
         log.info('[AutoUpdater] App swapped successfully');
 
         // 8. Launch new app and exit
-        execSync(`open "${currentAppPath}"`);
-        app.exit(0);
+        // Use -n to force a new instance (otherwise macOS reactivates the current process)
+        const { spawn } = require('child_process');
+        spawn('open', ['-n', currentAppPath], { detached: true, stdio: 'ignore' }).unref();
+        setTimeout(() => app.exit(0), 500);
 
       } catch (error) {
         log.error('[AutoUpdater] Manual install failed:', error);
