@@ -443,41 +443,55 @@ ipcMain.handle('updater:install', () => {
       const os = require('os');
       const { execSync } = require('child_process');
 
+      // Persistent debug log (survives app.exit via synchronous writes)
+      const debugLogPath = path.join(app.getPath('logs'), 'update-debug.log');
+      const debugLog = (msg) => {
+        const line = `[${new Date().toISOString()}] ${msg}\n`;
+        try { fs.appendFileSync(debugLogPath, line); } catch (_) { /* ignore */ }
+        log.info(msg);
+      };
+
       try {
-        log.info('[AutoUpdater] Install requested, downloadedFile:', downloadedUpdateFile);
+        debugLog(`[UpdateInstall] START - downloadedFile: ${downloadedUpdateFile}`);
+
         // 1. Find the downloaded ZIP
         let zipPath = downloadedUpdateFile;
         if (!zipPath || !fs.existsSync(zipPath)) {
-          log.error('[AutoUpdater] Downloaded update file not found:', zipPath);
+          debugLog(`[UpdateInstall] FAIL - ZIP not found: ${zipPath}`);
           return;
         }
+        debugLog(`[UpdateInstall] ZIP verified at: ${zipPath}`);
 
         // 2. Get current .app path
         const currentAppPath = app.getPath('exe').replace(/\/Contents\/MacOS\/.*$/, '');
-        log.info('[AutoUpdater] Current app path:', currentAppPath);
+        debugLog(`[UpdateInstall] Current app: ${currentAppPath}`);
+        debugLog(`[UpdateInstall] process.execPath: ${process.execPath}`);
 
         // 3. Extract ZIP to temp directory
         const tempDir = path.join(os.tmpdir(), 'auris-update-' + Date.now());
         execSync(`mkdir -p "${tempDir}"`);
         execSync(`ditto -xk "${zipPath}" "${tempDir}"`);
-        log.info('[AutoUpdater] Extracted to:', tempDir);
+        debugLog(`[UpdateInstall] Extracted to: ${tempDir}`);
 
         // 4. Find the .app in extracted content
         const items = fs.readdirSync(tempDir);
         const appName = items.find(i => i.endsWith('.app'));
         if (!appName) {
-          log.error('[AutoUpdater] No .app found in ZIP. Contents:', items);
+          debugLog(`[UpdateInstall] FAIL - No .app in ZIP. Contents: ${items.join(', ')}`);
           execSync(`rm -rf "${tempDir}"`);
           return;
         }
         const newAppPath = path.join(tempDir, appName);
+        debugLog(`[UpdateInstall] New app found: ${newAppPath}`);
 
         // 5. Remove quarantine attributes
         execSync(`xattr -cr "${newAppPath}"`);
+        debugLog('[UpdateInstall] Quarantine attributes removed');
 
         // 6. Close all windows
         app.removeAllListeners('window-all-closed');
         BrowserWindow.getAllWindows().forEach(w => w.destroy());
+        debugLog('[UpdateInstall] Windows destroyed');
 
         // 7. Swap: current -> .bak, new -> current, delete .bak
         const backupPath = currentAppPath + '.bak';
@@ -485,16 +499,32 @@ ipcMain.handle('updater:install', () => {
         execSync(`mv "${currentAppPath}" "${backupPath}"`);
         execSync(`mv "${newAppPath}" "${currentAppPath}"`);
         execSync(`rm -rf "${backupPath}" "${tempDir}"`);
-        log.info('[AutoUpdater] App swapped successfully');
+        debugLog('[UpdateInstall] App swapped successfully');
 
-        // 8. Launch new app and exit
-        // Use -n to force a new instance (otherwise macOS reactivates the current process)
-        const { spawn } = require('child_process');
-        spawn('open', ['-n', currentAppPath], { detached: true, stdio: 'ignore' }).unref();
-        setTimeout(() => app.exit(0), 500);
+        // 8. Verify the new binary exists at the expected path
+        const newBinary = path.join(currentAppPath, 'Contents', 'MacOS', 'Auris Cue Sheets');
+        const binaryExists = fs.existsSync(newBinary);
+        debugLog(`[UpdateInstall] New binary exists: ${binaryExists} at ${newBinary}`);
+
+        // 9. Release single-instance lock so the new process can acquire it.
+        // Without this, the new instance calls requestSingleInstanceLock(),
+        // fails (old process still holds it), and immediately quits.
+        app.releaseSingleInstanceLock();
+        debugLog('[UpdateInstall] Single-instance lock released');
+
+        // 10. Queue relaunch and exit.
+        // app.relaunch() tells Electron to spawn a new process at process.execPath
+        // after the current process exits. Since the swap put the new binary at
+        // that path, the new version will launch.
+        app.relaunch();
+        debugLog('[UpdateInstall] app.relaunch() called, exiting now');
+        app.exit(0);
 
       } catch (error) {
-        log.error('[AutoUpdater] Manual install failed:', error);
+        log.error('[UpdateInstall] FAIL -', error);
+        try {
+          fs.appendFileSync(debugLogPath, `[${new Date().toISOString()}] [UpdateInstall] FAIL - ${error.stack || error}\n`);
+        } catch (_) { /* ignore */ }
         app.exit(0);
       }
     });
