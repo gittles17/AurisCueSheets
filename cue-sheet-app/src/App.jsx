@@ -680,49 +680,34 @@ function App() {
   
   // Handle import wizard completion
   const handleImportWizardComplete = useCallback(async ({ cues: importedCues, projectInfo: wizardProjectInfo }) => {
-    // Save the path before clearing state
     const filePath = importWizardPath;
     
     setShowImportWizard(false);
     setImportWizardPath(null);
     
-    // Set cues from the wizard
-    setCues(importedCues.map((cue, idx) => ({
+    const normalizedCues = importedCues.map((cue, idx) => ({
       ...cue,
       id: cue.id || idx + 1,
       cueNumber: cue.cueNumber || idx + 1
-    })));
+    }));
     
-    // Set project info if available
-    if (wizardProjectInfo) {
-      setProjectInfo(prev => ({
-        ...prev,
-        projectName: wizardProjectInfo.projectName || prev.projectName || '',
-        spotTitle: wizardProjectInfo.spotTitle || prev.spotTitle || '',
-      }));
-    }
+    const normalizedProjectInfo = {
+      projectName: wizardProjectInfo?.projectName || '',
+      spotTitle: wizardProjectInfo?.spotTitle || '',
+    };
     
-    // Create project entry in file tree and open as a tab
     if (window.electronAPI && filePath) {
       const importResult = await window.electronAPI.importPrproj(filePath, { cues: importedCues, projectInfo: wizardProjectInfo }, projectFolder);
       if (importResult?.cueSheetId) {
         const projectId = importResult.cueSheetId;
         const projectName = wizardProjectInfo?.projectName || filePath.split('/').pop()?.replace('.prproj', '') || 'Untitled';
         
-        // Create a tab for this imported project
         const newTab = {
           id: generateTabId(),
           projectId,
           name: projectName,
-          cues: importedCues.map((cue, idx) => ({
-            ...cue,
-            id: cue.id || idx + 1,
-            cueNumber: cue.cueNumber || idx + 1
-          })),
-          projectInfo: {
-            projectName: wizardProjectInfo?.projectName || '',
-            spotTitle: wizardProjectInfo?.spotTitle || '',
-          },
+          cues: normalizedCues,
+          projectInfo: normalizedProjectInfo,
           undoHistory: [],
           historyIndex: -1,
           selection: null,
@@ -733,14 +718,19 @@ function App() {
         setOpenTabs(prev => [...prev, newTab]);
         setActiveTabId(newTab.id);
         setActiveProjectId(projectId);
+        setCues(normalizedCues);
+        setProjectInfo(prev => ({ ...prev, ...normalizedProjectInfo }));
         
-        // Refresh projects list
         const projectsData = await window.electronAPI.getProjects();
         setProjects(projectsData || []);
       }
+    } else {
+      setCues(normalizedCues);
+      if (wizardProjectInfo) {
+        setProjectInfo(prev => ({ ...prev, ...normalizedProjectInfo }));
+      }
     }
     
-    // Trigger auto-lookup
     shouldAutoLookupRef.current = true;
   }, [projectFolder, importWizardPath, setCues, setProjectInfo]);
   
