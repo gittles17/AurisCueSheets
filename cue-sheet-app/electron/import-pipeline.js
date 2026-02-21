@@ -312,10 +312,13 @@ async function parseProjectXML(filePath) {
         if (!clipName) clipName = clipToName.get(placement.subClipRef);
         
         if (clipName) {
-          const current = clipDurations.get(clipName) || { totalTicks: 0, instances: 0, maxTicks: 0 };
+          const current = clipDurations.get(clipName) || { totalTicks: 0, instances: 0, maxTicks: 0, earliestStart: Infinity };
           current.totalTicks += durationTicks;
           current.instances++;
           current.maxTicks = Math.max(current.maxTicks, durationTicks);
+          if (placement.start < current.earliestStart) {
+            current.earliestStart = placement.start;
+          }
           clipDurations.set(clipName, current);
         }
       }
@@ -327,14 +330,21 @@ async function parseProjectXML(filePath) {
             originalName.startsWith('z') || originalName.includes('JUNK') || originalName.includes('OLD') ||
             originalName.startsWith('*')) continue;
         
-        const durationData = clipDurations.get(originalName) || { totalTicks: 0, instances: 0, maxTicks: 0 };
+        const durationData = clipDurations.get(originalName) || { totalTicks: 0, instances: 0, maxTicks: 0, earliestStart: Infinity };
         clips.push({
           id: `clip-${clips.length + 1}`,
           originalName,
           ticks: durationData.totalTicks,
           maxTicks: durationData.maxTicks,
-          instances: durationData.instances
+          instances: durationData.instances,
+          earliestStartTick: durationData.earliestStart
         });
+      }
+      
+      clips.sort((a, b) => a.earliestStartTick - b.earliestStartTick);
+      
+      for (let i = 0; i < clips.length; i++) {
+        clips[i].id = `clip-${i + 1}`;
       }
       
       const projectName = path.basename(filePath, '.prproj');
