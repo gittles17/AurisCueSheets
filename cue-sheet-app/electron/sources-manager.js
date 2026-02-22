@@ -211,21 +211,31 @@ const defaultSources = {
  *   2. Global key from Supabase (fetched after auth, cached locally)
  *   3. Environment variable from .env
  */
+const LEGACY_KEY_MAP = {
+  opus: 'anthropic_api_key',
+  voyage: 'voyage_api_key'
+};
+
+const ENV_VAR_MAP = {
+  opus: 'ANTHROPIC_API_KEY',
+  voyage: 'VOYAGE_API_KEY'
+};
+
 function resolveApiKey(sourceId, userKey) {
-  // Priority 1: user's own explicit key
   if (userKey) return userKey;
 
-  // Priority 2: global key from Supabase
-  if (sourceId === 'opus' && globalKeys.anthropic_api_key) {
-    return globalKeys.anthropic_api_key;
-  }
-  if (sourceId === 'voyage' && globalKeys.voyage_api_key) {
-    return globalKeys.voyage_api_key;
+  const legacyKey = LEGACY_KEY_MAP[sourceId];
+  if (legacyKey && globalKeys[legacyKey]) {
+    return globalKeys[legacyKey];
   }
 
-  // Priority 3: environment variable
-  if (sourceId === 'opus') return process.env.ANTHROPIC_API_KEY || '';
-  if (sourceId === 'voyage') return process.env.VOYAGE_API_KEY || '';
+  const genericKey = `${sourceId}_api_key`;
+  if (globalKeys[genericKey]) {
+    return globalKeys[genericKey];
+  }
+
+  const envVar = ENV_VAR_MAP[sourceId];
+  if (envVar) return process.env[envVar] || '';
 
   return '';
 }
@@ -256,12 +266,11 @@ function loadSources() {
     console.error('Error loading sources:', error);
   }
 
-  // Apply key resolution for AI sources
-  if (sources.opus) {
-    sources.opus.config.apiKey = resolveApiKey('opus', sources.opus.config.apiKey);
-  }
-  if (sources.voyage) {
-    sources.voyage.config.apiKey = resolveApiKey('voyage', sources.voyage.config.apiKey);
+  for (const [id, source] of Object.entries(sources)) {
+    if (source.config?.apiKey !== undefined || globalKeys[LEGACY_KEY_MAP[id]] || globalKeys[`${id}_api_key`]) {
+      source.config = source.config || {};
+      source.config.apiKey = resolveApiKey(id, source.config.apiKey);
+    }
   }
 
   return sources;

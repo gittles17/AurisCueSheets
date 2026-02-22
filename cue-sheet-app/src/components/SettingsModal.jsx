@@ -42,14 +42,13 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
   const [showEditTrackModal, setShowEditTrackModal] = useState(false);
   const [editingTrack, setEditingTrack] = useState(null);
   
-  // Global keys (admin) state
-  const [globalAnthropicKey, setGlobalAnthropicKey] = useState('');
-  const [globalVoyageKey, setGlobalVoyageKey] = useState('');
-  const [showGlobalAnthropicKey, setShowGlobalAnthropicKey] = useState(false);
-  const [showGlobalVoyageKey, setShowGlobalVoyageKey] = useState(false);
+  // Global keys (admin) state - dynamic for all sources that require keys
+  const [globalKeyValues, setGlobalKeyValues] = useState({});
+  const [globalKeyVisibility, setGlobalKeyVisibility] = useState({});
   const [globalKeySaving, setGlobalKeySaving] = useState(null);
   const [globalKeySaved, setGlobalKeySaved] = useState(null);
   const [isLoadingGlobalKeys, setIsLoadingGlobalKeys] = useState(false);
+  const [keySources, setKeySources] = useState([]);
   
   // Patterns tab state
   const [patterns, setPatterns] = useState([]);
@@ -92,21 +91,34 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
     }
   }, [isOpen, activeTab]);
 
-  // Load global keys when admin views General tab
+  const LEGACY_KEY_NAMES = { opus: 'anthropic_api_key', voyage: 'voyage_api_key' };
+  const getGlobalKeyName = (sourceId) => LEGACY_KEY_NAMES[sourceId] || `${sourceId}_api_key`;
+
   useEffect(() => {
-    if (isOpen && isAdmin && activeTab === 'general' && window.electronAPI?.globalKeysGet) {
-      setIsLoadingGlobalKeys(true);
-      window.electronAPI.globalKeysFetch().then(keys => {
-        if (keys.anthropic_api_key) setGlobalAnthropicKey(keys.anthropic_api_key);
-        if (keys.voyage_api_key) setGlobalVoyageKey(keys.voyage_api_key);
-      }).catch(() => {
-        // Fall back to cached local keys
-        window.electronAPI.globalKeysGet().then(keys => {
-          if (keys.anthropic_api_key) setGlobalAnthropicKey(keys.anthropic_api_key);
-          if (keys.voyage_api_key) setGlobalVoyageKey(keys.voyage_api_key);
-        });
-      }).finally(() => setIsLoadingGlobalKeys(false));
-    }
+    if (!isOpen || !isAdmin || activeTab !== 'general' || !window.electronAPI?.globalKeysGet) return;
+    setIsLoadingGlobalKeys(true);
+
+    const fetchSources = window.electronAPI.cloudSourcesGet?.() || Promise.resolve({});
+    const fetchKeys = window.electronAPI.globalKeysFetch().catch(() =>
+      window.electronAPI.globalKeysGet()
+    );
+
+    Promise.all([fetchSources, fetchKeys]).then(([cloudSources, keys]) => {
+      const srcList = Object.values(cloudSources || {})
+        .filter(s => s.requiresKey || s.requires_key)
+        .map(s => ({
+          id: s.id,
+          name: s.name,
+          keyName: getGlobalKeyName(s.id)
+        }));
+      setKeySources(srcList);
+
+      const values = {};
+      for (const src of srcList) {
+        values[src.keyName] = keys[src.keyName] || '';
+      }
+      setGlobalKeyValues(values);
+    }).finally(() => setIsLoadingGlobalKeys(false));
   }, [isOpen, isAdmin, activeTab]);
   
   // Load learned tracks from cloud (single source of truth)
@@ -663,79 +675,46 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
                         <div className="flex items-center justify-center py-4">
                           <CircleNotch size={16} className="text-purple-400 animate-spin" />
                         </div>
+                      ) : keySources.length === 0 ? (
+                        <p className="text-xs text-auris-text-muted italic">No sources require API keys.</p>
                       ) : (
                         <div className="space-y-3">
-                          {/* Global Anthropic Key */}
-                          <div>
-                            <label className="block text-xs text-auris-text-secondary mb-1">Claude API Key (all users)</label>
-                            <div className="flex gap-2">
-                              <div className="relative flex-1">
-                                <input
-                                  type={showGlobalAnthropicKey ? 'text' : 'password'}
-                                  value={globalAnthropicKey}
-                                  onChange={(e) => setGlobalAnthropicKey(e.target.value)}
-                                  placeholder="sk-ant-api03-..."
-                                  className="input w-full pr-8 font-mono text-xs py-2"
-                                />
+                          {keySources.map(src => (
+                            <div key={src.keyName}>
+                              <label className="block text-xs text-auris-text-secondary mb-1">{src.name} Key (all users)</label>
+                              <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                  <input
+                                    type={globalKeyVisibility[src.keyName] ? 'text' : 'password'}
+                                    value={globalKeyValues[src.keyName] || ''}
+                                    onChange={(e) => setGlobalKeyValues(prev => ({ ...prev, [src.keyName]: e.target.value }))}
+                                    placeholder="Enter API key..."
+                                    className="input w-full pr-8 font-mono text-xs py-2"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setGlobalKeyVisibility(prev => ({ ...prev, [src.keyName]: !prev[src.keyName] }))}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-auris-text-muted hover:text-auris-text transition-colors"
+                                  >
+                                    {globalKeyVisibility[src.keyName] ? <EyeSlash size={14} /> : <Eye size={14} />}
+                                  </button>
+                                </div>
                                 <button
-                                  type="button"
-                                  onClick={() => setShowGlobalAnthropicKey(!showGlobalAnthropicKey)}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-auris-text-muted hover:text-auris-text transition-colors"
+                                  onClick={() => handleSaveGlobalKey(src.keyName, globalKeyValues[src.keyName] || '')}
+                                  className="btn btn-primary px-3 py-2 text-xs"
+                                  disabled={!globalKeyValues[src.keyName] || globalKeySaving === src.keyName}
                                 >
-                                  {showGlobalAnthropicKey ? <EyeSlash size={14} /> : <Eye size={14} />}
+                                  {globalKeySaving === src.keyName ? (
+                                    <CircleNotch size={14} className="animate-spin" />
+                                  ) : globalKeySaved === src.keyName ? (
+                                    <span className="flex items-center gap-1"><Check size={14} weight="bold" /> Saved</span>
+                                  ) : (
+                                    'Save'
+                                  )}
                                 </button>
                               </div>
-                              <button
-                                onClick={() => handleSaveGlobalKey('anthropic_api_key', globalAnthropicKey)}
-                                className="btn btn-primary px-3 py-2 text-xs"
-                                disabled={!globalAnthropicKey || globalKeySaving === 'anthropic_api_key'}
-                              >
-                                {globalKeySaving === 'anthropic_api_key' ? (
-                                  <CircleNotch size={14} className="animate-spin" />
-                                ) : globalKeySaved === 'anthropic_api_key' ? (
-                                  <span className="flex items-center gap-1"><Check size={14} weight="bold" /> Saved</span>
-                                ) : (
-                                  'Save'
-                                )}
-                              </button>
                             </div>
-                          </div>
-                          
-                          {/* Global Voyage Key */}
-                          <div>
-                            <label className="block text-xs text-auris-text-secondary mb-1">Voyage AI Key (all users)</label>
-                            <div className="flex gap-2">
-                              <div className="relative flex-1">
-                                <input
-                                  type={showGlobalVoyageKey ? 'text' : 'password'}
-                                  value={globalVoyageKey}
-                                  onChange={(e) => setGlobalVoyageKey(e.target.value)}
-                                  placeholder="pa-..."
-                                  className="input w-full pr-8 font-mono text-xs py-2"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => setShowGlobalVoyageKey(!showGlobalVoyageKey)}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-auris-text-muted hover:text-auris-text transition-colors"
-                                >
-                                  {showGlobalVoyageKey ? <EyeSlash size={14} /> : <Eye size={14} />}
-                                </button>
-                              </div>
-                              <button
-                                onClick={() => handleSaveGlobalKey('voyage_api_key', globalVoyageKey)}
-                                className="btn btn-primary px-3 py-2 text-xs"
-                                disabled={!globalVoyageKey || globalKeySaving === 'voyage_api_key'}
-                              >
-                                {globalKeySaving === 'voyage_api_key' ? (
-                                  <CircleNotch size={14} className="animate-spin" />
-                                ) : globalKeySaved === 'voyage_api_key' ? (
-                                  <span className="flex items-center gap-1"><Check size={14} weight="bold" /> Saved</span>
-                                ) : (
-                                  'Save'
-                                )}
-                              </button>
-                            </div>
-                          </div>
+                          ))}
                         </div>
                       )}
                     </div>

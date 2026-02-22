@@ -11,6 +11,21 @@ import { useAuth } from '../contexts/AuthContext';
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
   {
+    version: 'v0.15',
+    date: 'February 2026',
+    features: [
+      { title: 'Muted Track Filtering', description: 'Muted/disabled tracks in your Premiere timeline are now automatically detected and excluded during import, preventing silent SFX from cluttering your cue sheet.', icon: CheckCircle },
+      { title: 'Improved Stem Detection', description: 'Stem selection now recognizes common instrument names (Bass, Drums, Vocals, Keys, Guitar, etc.) and uses fuzzy matching to group stems with their parent cues, even with slight naming variations.', icon: CheckCircle },
+      { title: 'Delete/Remove Cues', description: 'A trash icon now appears on hover next to each cue, letting you permanently remove tracks from the cue sheet instead of just toggling visibility.', icon: CheckCircle },
+      { title: 'Composer/Publisher Separation', description: 'The composer tag is now parsed to separate actual composer names from publisher entries. Publishers are routed to the publisher field instead of being mixed into the composer column.', icon: CheckCircle },
+      { title: 'Clean Track Names', description: 'File name parsing now strips version numbers, duration suffixes, mix types, and technical tags to display clean, readable track names instead of raw filenames.', icon: CheckCircle },
+      { title: 'Project Tab Switching', description: 'Tab switching has been rewritten with stable refs to ensure each project reliably loads its own workspace data. Previously, clicking a project could show stale data from another tab.', icon: CheckCircle },
+      { title: 'Timeline Sort Order', description: 'Cues now sort by their timeline position (in-point) instead of alphabetically, preserving the correct sequence from your Premiere project.', icon: CheckCircle },
+      { title: 'Manual Fill-In Fix', description: 'Fixed a stale-closure bug in the click handler so the manual fill-in option now reliably appears alongside the AI batch option when clicking cells in the Actions panel.', icon: CheckCircle },
+      { title: 'Global API Keys', description: 'API key resolution now works generically for all configured sources instead of being hardcoded per provider, making it easier to add new AI services.', icon: CheckCircle },
+    ]
+  },
+  {
     version: 'v0.14',
     date: 'February 2026',
     features: [

@@ -113,6 +113,15 @@ export function useCueSheet() {
     }));
   }, []);
 
+  const removeCue = useCallback((cueId) => {
+    setCues(prev => prev.filter(cue => cue.id !== cueId));
+  }, []);
+
+  const removeCues = useCallback((cueIds) => {
+    const idSet = new Set(cueIds);
+    setCues(prev => prev.filter(cue => !idSet.has(cue.id)));
+  }, []);
+
   // Batch update multiple cues at once (for delete, paste, etc.)
   const batchUpdateCues = useCallback((updates) => {
     // updates is an array of { cueId, updates } objects
@@ -304,6 +313,8 @@ export function useCueSheet() {
     exportToExcel,
     updateCue,
     batchUpdateCues,
+    removeCue,
+    removeCues,
     autoLookupAll,
     lookupSingleCue,
     importContacts

@@ -1993,9 +1993,16 @@ function parseAudioFileName(filename) {
     };
   }
   
-  // Generic audio file - just clean up the name
+  // Generic audio file - clean up the name
   const cleanName = nameWithoutExt
     .replace(/^mx_?/i, '')
+    .replace(/^SYNC\s*/i, '')
+    .replace(/_LVTD[\s_]*ClrMx$/i, '')
+    .replace(/[_\s]+v\d+(\.\d+)?$/i, '')
+    .replace(/[_\s]+(30s|60s|15s|10s|90s)$/i, '')
+    .replace(/[_\s]+(Full|Alt|Edit|Clean|Explicit|Instrumental|Radio|Extended|Remix|Short|Long|Loop)$/i, '')
+    .replace(/[_\s]+(Mix|Mixdown|Master|Mastered|Final|Draft)$/i, '')
+    .replace(/[_\s]*Stems?$/i, '')
     .replace(/_/g, ' ')
     .trim();
   
@@ -3309,6 +3316,7 @@ if (supabaseClient.isConfigured()) {
         const keys = await supabaseClient.fetchGlobalKeys();
         if (Object.keys(keys).length > 0) {
           sourcesManager.setGlobalKeys(keys);
+          cloudSourcesManager.setGlobalKeys(keys);
           log.info('[Auth] Global API keys loaded from Supabase');
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('cloudSources:change', {
@@ -3333,6 +3341,7 @@ ipcMain.handle('globalKeys:fetch', async () => {
     const keys = await supabaseClient.fetchGlobalKeys();
     if (Object.keys(keys).length > 0) {
       sourcesManager.setGlobalKeys(keys);
+      cloudSourcesManager.setGlobalKeys(keys);
     }
     return keys;
   } catch (error) {

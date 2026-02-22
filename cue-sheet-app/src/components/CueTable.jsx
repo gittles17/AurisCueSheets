@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, memo, useMemo } from 'react';
 import { List } from 'react-window';
-import { CircleNotch, Warning, CheckCircle, XCircle, Database, Sparkle, Eye, EyeSlash, NotePencil, MagnifyingGlassMinus, MagnifyingGlassPlus, Lightning } from '@phosphor-icons/react';
+import { CircleNotch, Warning, CheckCircle, XCircle, Database, Sparkle, Eye, EyeSlash, NotePencil, MagnifyingGlassMinus, MagnifyingGlassPlus, Lightning, Trash } from '@phosphor-icons/react';
 import AutocompleteInput from './AutocompleteInput';
 
 // Row height constant for virtualization
@@ -224,6 +224,7 @@ function CueTable({
   cues, 
   onUpdateCue,
   onBatchUpdateCues,
+  onRemoveCue,
   onLookupCue, 
   isLoading, 
   isLookingUp, 
@@ -251,11 +252,19 @@ function CueTable({
   const [isSelecting, setIsSelecting] = useState(false);
   const [anchorCell, setAnchorCell] = useState(null); // { row, col }
   const tableRef = useRef(null);
+
+  // Refs to avoid stale closures in native mouseup handler.
+  // Without these, rapid double-clicks can fire mouseup before React
+  // re-renders with the updated state from mousedown, causing the
+  // selection notification to be silently skipped.
+  const isSelectingRef = useRef(false);
+  const selectionRef = useRef(null);
   
   // Apply external selection (for tour demo)
   useEffect(() => {
     if (externalSelection) {
       setSelection(externalSelection);
+      selectionRef.current = externalSelection;
     }
   }, [externalSelection]);
   const scrollContainerRef = useRef(null);
@@ -502,22 +511,27 @@ function CueTable({
     
     if (event.shiftKey && anchorCell) {
       // Shift+click: extend selection from anchor
-      setSelection({
+      const newSel = {
         startRow: anchorCell.row,
         startCol: anchorCell.col,
         endRow: rowIndex,
         endCol: colIndex
-      });
+      };
+      setSelection(newSel);
+      selectionRef.current = newSel;
     } else {
       // Regular click: start new selection
-      setAnchorCell({ row: rowIndex, col: colIndex });
-      setSelection({
+      const newSel = {
         startRow: rowIndex,
         startCol: colIndex,
         endRow: rowIndex,
         endCol: colIndex
-      });
+      };
+      setAnchorCell({ row: rowIndex, col: colIndex });
+      setSelection(newSel);
+      selectionRef.current = newSel;
       setIsSelecting(true);
+      isSelectingRef.current = true;
     }
   }, [anchorCell, columns]);
 
@@ -538,50 +552,67 @@ function CueTable({
     if (!pendingSelectionRef.current) {
       pendingSelectionRef.current = requestAnimationFrame(() => {
         setSelection(newSelection);
+        selectionRef.current = newSelection;
         pendingSelectionRef.current = null;
       });
     }
   }, [isSelecting, anchorCell, columns]);
 
+  // Keep stable refs for values the native mouseup handler needs.
+  // This prevents stale-closure misses during rapid double-clicks
+  // where mouseup fires before React commits the mousedown render.
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+  const cuesRef = useRef(cues);
+  cuesRef.current = cues;
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
+
   // Handle mouse up - end selection
   useEffect(() => {
     const handleMouseUp = () => {
-      if (isSelecting) {
-        setIsSelecting(false);
-        // Mark that we just finished selecting (prevents background click from clearing)
-        justFinishedSelectingRef.current = true;
-        // Notify parent of selection change
-        if (selection && onSelectionChange) {
-          const bounds = getSelectionBounds();
-          if (bounds) {
-            const selectedCells = [];
-            for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
-              for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
-                if (columns[c]?.selectable && cues[r]) {
-                  selectedCells.push({
-                    rowId: cues[r].id,
-                    rowIndex: r,
-                    colIndex: c,
-                    field: columns[c].key,
-                    value: cues[r][columns[c].key]
-                  });
-                }
-              }
+      if (!isSelectingRef.current) return;
+
+      isSelectingRef.current = false;
+      setIsSelecting(false);
+      justFinishedSelectingRef.current = true;
+
+      const sel = selectionRef.current;
+      const cb = onSelectionChangeRef.current;
+      const curCues = cuesRef.current;
+      const curCols = columnsRef.current;
+
+      if (sel && cb) {
+        const minRow = Math.min(sel.startRow, sel.endRow);
+        const maxRow = Math.max(sel.startRow, sel.endRow);
+        const minCol = Math.min(sel.startCol, sel.endCol);
+        const maxCol = Math.max(sel.startCol, sel.endCol);
+
+        const selectedCells = [];
+        for (let r = minRow; r <= maxRow; r++) {
+          for (let c = minCol; c <= maxCol; c++) {
+            if (curCols[c]?.selectable && curCues[r]) {
+              selectedCells.push({
+                rowId: curCues[r].id,
+                rowIndex: r,
+                colIndex: c,
+                field: curCols[c].key,
+                value: curCues[r][curCols[c].key]
+              });
             }
-            // Get position of selected cells for contextual UI
-            const selectedRows = cues.slice(bounds.minRow, bounds.maxRow + 1);
-            const firstCell = tableRef.current?.querySelector(`[data-row="${bounds.minRow}"][data-col="${bounds.minCol}"]`);
-            const rect = firstCell?.getBoundingClientRect();
-            const position = rect ? { x: rect.right + 8, y: rect.top } : null;
-            onSelectionChange(selectedCells, selectedRows, position);
           }
         }
+        const selectedRows = curCues.slice(minRow, maxRow + 1);
+        const firstCell = tableRef.current?.querySelector(`[data-row="${minRow}"][data-col="${minCol}"]`);
+        const rect = firstCell?.getBoundingClientRect();
+        const position = rect ? { x: rect.right + 8, y: rect.top } : null;
+        cb(selectedCells, selectedRows, position);
       }
     };
     
     window.addEventListener('mouseup', handleMouseUp);
     return () => window.removeEventListener('mouseup', handleMouseUp);
-  }, [isSelecting, selection, onSelectionChange, cues, columns, getSelectionBounds]);
+  }, []);
 
   // Track if we just finished selecting (to prevent background click from clearing)
   const justFinishedSelectingRef = useRef(false);
@@ -602,6 +633,7 @@ function CueTable({
     
     if (!clickedOnCell) {
       setSelection(null);
+      selectionRef.current = null;
       setAnchorCell(null);
       onSelectionChange?.([], []);
     }
@@ -619,6 +651,7 @@ function CueTable({
       
       if (e.key === 'Escape') {
         setSelection(null);
+        selectionRef.current = null;
         setAnchorCell(null);
         setEditingCell(null);
         onSelectionChange?.([], []);
@@ -784,17 +817,31 @@ function CueTable({
     // Visibility toggle column
     if (column.key === 'visibility') {
       return (
-        <button
-          onClick={() => handleToggleHidden(cue.id)}
-          className={`p-0.5 rounded transition-colors ${
-            isHidden 
-              ? 'text-auris-text-muted/40 hover:text-auris-text-muted' 
-              : 'text-auris-text-muted/60 hover:text-auris-text'
-          }`}
-          title={isHidden ? 'Show track (include in export)' : 'Hide track (exclude from export)'}
-        >
-          {isHidden ? <EyeSlash size={14} /> : <Eye size={14} />}
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={() => handleToggleHidden(cue.id)}
+            className={`p-0.5 rounded transition-colors ${
+              isHidden 
+                ? 'text-auris-text-muted/40 hover:text-auris-text-muted' 
+                : 'text-auris-text-muted/60 hover:text-auris-text'
+            }`}
+            title={isHidden ? 'Show track (include in export)' : 'Hide track (exclude from export)'}
+          >
+            {isHidden ? <EyeSlash size={14} /> : <Eye size={14} />}
+          </button>
+          {isHovered && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveCue?.(cue.id);
+              }}
+              className="p-0.5 rounded transition-colors text-auris-text-muted/40 hover:text-auris-red"
+              title="Remove track from cue sheet"
+            >
+              <Trash size={13} />
+            </button>
+          )}
+        </div>
       );
     }
 

@@ -198,8 +198,7 @@ async function fetchGlobalKeys() {
   try {
     const { data, error } = await supabase
       .from('app_config')
-      .select('key, value')
-      .in('key', ['anthropic_api_key', 'voyage_api_key']);
+      .select('key, value');
 
     if (error) {
       console.error('[Supabase] Failed to fetch global keys:', error.message);

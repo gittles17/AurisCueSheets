@@ -9,11 +9,14 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.14';
+const VERSION = 'v0.15';
 const WHATS_NEW = [
-  { title: 'Excel Export Fix', description: 'Master/Label/Library column now exports correctly.' },
-  { title: 'Import Exclusion Fix', description: 'Removed items stay removed through the entire import.' },
-  { title: 'Stem Combining', description: 'Stems are properly grouped with combined durations on import.' },
+  { title: 'Muted Track Filtering', description: 'Muted/disabled tracks in your timeline are automatically excluded on import.' },
+  { title: 'Better Stem Detection', description: 'Stems now match by instrument name and group correctly with parent cues.' },
+  { title: 'Delete Cues', description: 'Permanently remove cues from your sheet with the new trash icon.' },
+  { title: 'Composer/Publisher Fix', description: 'Composer and publisher data now route to the correct fields.' },
+  { title: 'Clean Track Names', description: 'File names are parsed to show clean, readable track names.' },
+  { title: 'Project Tab Fix', description: 'Switching between projects now reliably loads the correct data.' },
 ];
 
 export default function LoginPage({ onLogin }) {

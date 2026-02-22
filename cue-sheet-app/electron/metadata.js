@@ -11,14 +11,19 @@ async function readAudioMetadata(filePath) {
     const mm = await import('music-metadata');
     const metadata = await mm.parseFile(filePath);
     
+    const separated = separateComposerPublisher(metadata.common.composer);
+    const labelPublisher = formatPublisherField(metadata.common.label);
+    // Merge: publisher from label tag, plus any publishers extracted from composer tag
+    const allPublishers = [labelPublisher, separated.publishers].filter(Boolean).join(', ');
+
     return {
       success: true,
       data: {
         title: metadata.common.title || '',
         artist: metadata.common.artist || '',
         album: metadata.common.album || '',
-        composer: formatComposerField(metadata.common.composer),
-        publisher: formatPublisherField(metadata.common.label),
+        composer: separated.composers,
+        publisher: allPublishers,
         trackNumber: metadata.common.track?.no?.toString() || '',
         year: metadata.common.year || '',
         genre: metadata.common.genre?.join(', ') || '',
@@ -26,10 +31,8 @@ async function readAudioMetadata(filePath) {
         sampleRate: metadata.format.sampleRate || 0,
         bitrate: metadata.format.bitrate || 0,
         codec: metadata.format.codec || '',
-        // Additional fields that might contain useful info
         copyright: metadata.common.copyright || '',
         comment: metadata.common.comment?.join(' ') || '',
-        // Raw tags for debugging
         raw: metadata.native
       }
     };
@@ -41,20 +44,45 @@ async function readAudioMetadata(filePath) {
   }
 }
 
-// Format composer field with PRO affiliation if available
-function formatComposerField(composers) {
+const PUBLISHER_KEYWORDS = ['music', 'publishing', 'entertainment', 'records', 'rights', 'management', 'editions', 'songs', 'media'];
+
+function isPublisherName(name) {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  return PUBLISHER_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+// Separate composer entries from publisher entries within the composer tag,
+// returning both so they can be routed to the correct fields.
+function separateComposerPublisher(composers) {
   if (!composers || !Array.isArray(composers) || composers.length === 0) {
-    return '';
+    return { composers: '', publishers: '' };
   }
-  
-  return composers.map(composer => {
-    // Check if PRO affiliation is already included
-    if (composer.includes('ASCAP') || composer.includes('BMI') || 
-        composer.includes('SESAC') || composer.includes('PRS')) {
-      return composer;
+
+  const composerEntries = [];
+  const publisherEntries = [];
+
+  for (const entry of composers) {
+    if (!entry || !entry.trim()) continue;
+
+    // Check if this entry looks like a publisher (contains publisher keywords)
+    const baseName = entry.replace(/\s*\([^)]*\)/g, '').trim();
+    if (isPublisherName(baseName)) {
+      publisherEntries.push(entry);
+    } else {
+      composerEntries.push(entry);
     }
-    return composer;
-  }).join(', ');
+  }
+
+  return {
+    composers: composerEntries.join(', '),
+    publishers: publisherEntries.join(', ')
+  };
+}
+
+// Format composer field (backward-compatible wrapper)
+function formatComposerField(composers) {
+  return separateComposerPublisher(composers).composers;
 }
 
 // Format publisher field
@@ -173,5 +201,6 @@ module.exports = {
   readAudioMetadata,
   enrichCueWithMetadata,
   identifyLibrary,
-  parseTrackName
+  parseTrackName,
+  separateComposerPublisher
 };

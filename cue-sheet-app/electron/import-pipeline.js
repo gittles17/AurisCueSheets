@@ -150,6 +150,7 @@ async function parseProjectXML(filePath) {
     const subClipToClip = new Map();
     const clipToName = new Map();
     const clipDurations = new Map();
+    const disabledClipNames = new Set();
     const allAudioFiles = new Set();
     
     // SAX parser state - strict mode to preserve tag name casing
@@ -164,6 +165,7 @@ async function parseProjectXML(filePath) {
     let audioClipStart = null;
     let audioClipEnd = null;
     let audioClipSubClipRef = null;
+    let audioClipDisabled = false;
     
     // Store raw audio clip placements for deferred resolution
     // (SubClip/Clip definitions may appear AFTER AudioClipTrackItems in the XML)
@@ -206,6 +208,7 @@ async function parseProjectXML(filePath) {
         audioClipStart = null;
         audioClipEnd = null;
         audioClipSubClipRef = null;
+        audioClipDisabled = false;
       }
       
       // SubClip ObjectRef inside AudioClipTrackItem
@@ -252,6 +255,11 @@ async function parseProjectXML(filePath) {
         }
       }
       
+      // Disabled element inside AudioClipTrackItem (muted clips)
+      if (tagName === 'Disabled' && inAudioClipTrackItem && text.toLowerCase() === 'true') {
+        audioClipDisabled = true;
+      }
+      
       // Start/End inside AudioClipTrackItem
       if (tagName === 'Start' && inAudioClipTrackItem && text) {
         // Only set if not already set (first Start is the timeline position)
@@ -277,19 +285,28 @@ async function parseProjectXML(filePath) {
         currentClipId = null;
       }
       
-      // Close AudioClipTrackItem -> store placement for deferred resolution
+      // Close AudioClipTrackItem -> store placement for deferred resolution (skip disabled/muted)
       if (tagName === 'AudioClipTrackItem' && inAudioClipTrackItem) {
-        if (audioClipStart !== null && audioClipEnd !== null && audioClipSubClipRef) {
+        if (audioClipDisabled && audioClipSubClipRef) {
+          rawPlacements.push({
+            start: audioClipStart || 0,
+            end: audioClipEnd || 0,
+            subClipRef: audioClipSubClipRef,
+            disabled: true
+          });
+        } else if (audioClipStart !== null && audioClipEnd !== null && audioClipSubClipRef) {
           rawPlacements.push({
             start: audioClipStart,
             end: audioClipEnd,
-            subClipRef: audioClipSubClipRef
+            subClipRef: audioClipSubClipRef,
+            disabled: false
           });
         }
         inAudioClipTrackItem = false;
         audioClipStart = null;
         audioClipEnd = null;
         audioClipSubClipRef = null;
+        audioClipDisabled = false;
       }
       
       currentText = '';
@@ -306,24 +323,28 @@ async function parseProjectXML(filePath) {
     saxParser.on('end', () => {
       // Resolve deferred placements now that all SubClip/Clip maps are built
       for (const placement of rawPlacements) {
-        const durationTicks = placement.end - placement.start;
         const clipRef = subClipToClip.get(placement.subClipRef);
         let clipName = clipRef ? clipToName.get(clipRef) : null;
         if (!clipName) clipName = clipToName.get(placement.subClipRef);
         
         if (clipName) {
-          const current = clipDurations.get(clipName) || { totalTicks: 0, instances: 0, maxTicks: 0, earliestStart: Infinity };
-          current.totalTicks += durationTicks;
-          current.instances++;
-          current.maxTicks = Math.max(current.maxTicks, durationTicks);
-          if (placement.start < current.earliestStart) {
-            current.earliestStart = placement.start;
+          if (placement.disabled) {
+            disabledClipNames.add(clipName);
+          } else {
+            const durationTicks = placement.end - placement.start;
+            const current = clipDurations.get(clipName) || { totalTicks: 0, instances: 0, maxTicks: 0, earliestStart: Infinity };
+            current.totalTicks += durationTicks;
+            current.instances++;
+            current.maxTicks = Math.max(current.maxTicks, durationTicks);
+            if (placement.start < current.earliestStart) {
+              current.earliestStart = placement.start;
+            }
+            clipDurations.set(clipName, current);
           }
-          clipDurations.set(clipName, current);
         }
       }
       
-      // Build final clips array
+      // Build final clips array (skip clips where ALL placements are disabled/muted)
       const clips = [];
       for (const originalName of allAudioFiles) {
         if (originalName === 'Root Bin' || originalName === 'Audio' || originalName === 'Balance' || 
@@ -331,6 +352,10 @@ async function parseProjectXML(filePath) {
             originalName.startsWith('*')) continue;
         
         const durationData = clipDurations.get(originalName) || { totalTicks: 0, instances: 0, maxTicks: 0, earliestStart: Infinity };
+        
+        // Skip clips that only have disabled/muted placements (no active instances)
+        if (durationData.instances === 0 && disabledClipNames.has(originalName)) continue;
+        
         clips.push({
           id: `clip-${clips.length + 1}`,
           originalName,
@@ -572,8 +597,14 @@ function isSfx(originalName, displayName) {
 function parseAudioFileName(filename) {
   const nameWithoutExt = filename.replace(/\.(wav|aif|aiff|mp3|m4a|flac)$/i, '');
   
-  // Check if filename ends with _Stems or contains _STEM_ or STEM (indicates stem file)
-  const isStemFile = /_Stems?$/i.test(nameWithoutExt) || /_STEM_/i.test(nameWithoutExt) || /\sSTEM\s/i.test(nameWithoutExt);
+  // Check if filename contains STEM keyword
+  const hasStemKeyword = /_Stems?$/i.test(nameWithoutExt) || /_STEM_/i.test(nameWithoutExt) || /\sSTEM\s/i.test(nameWithoutExt);
+  
+  // Common stem-type suffixes (instrument/part names at end of filename)
+  const STEM_PART_PATTERN = /[_\s](Bass|Drums?|Perc(?:ussion)?|Vocals?|Vox|BGVs?\d*|Guitar(?:s)?|Keys|Synth(?:s)?|Strings|Horns|Brass|Woodwinds|Pads|Piano|Organ|Choir|Melody|Rhythm|Lead|Backing|Sub|Lo|Hi|Mid|Acoustic|Electric|Ambient|Atmosphere|FX|Click|Full\s*Mix)$/i;
+  const stemPartMatch = nameWithoutExt.match(STEM_PART_PATTERN);
+  
+  const isStemFile = hasStemKeyword || !!stemPartMatch;
   
   // BMG stem pattern: BASS_mx_BMGPM_IATS021_Punch_Drunk_STEM_BASS
   const bmgStemMatch = nameWithoutExt.match(/^([A-Z]+)_mx_BMGPM_([A-Z]+\d*)_(.+?)_STEM_/i);
@@ -848,40 +879,49 @@ function parseAudioFileName(filename) {
     };
   }
   
-  // Generic audio file with mx_ prefix - LOW CONFIDENCE (needs Opus review)
+  // Generic audio file - LOW CONFIDENCE (needs Opus review)
   let cleanName = nameWithoutExt
     .replace(/^mx_?/i, '')
-    .replace(/^SYNC\s+/i, '')  // Remove SYNC prefix
-    .replace(/_LVTD[\s_]*ClrMx$/i, '')  // Remove LVTD ClrMx suffix (before underscore replacement)
+    .replace(/^SYNC\s+/i, '')
+    .replace(/_LVTD[\s_]*ClrMx$/i, '')
+    .replace(/[_\s]+v\d+(\.\d+)?$/i, '')
+    .replace(/[_\s]+(30s|60s|15s|10s|90s)$/i, '')
+    .replace(/[_\s]+(Full|Alt|Edit|Clean|Explicit|Instrumental|Radio|Extended|Remix|Short|Long|Loop)$/i, '')
+    .replace(/[_\s]+(Mix|Mixdown|Master|Mastered|Final|Draft)$/i, '')
     .replace(/_/g, ' ')
     .trim();
   
-  // Remove _Stems suffix for display
   cleanName = cleanName.replace(/\s*Stems?$/i, '').trim();
   
-  // Remove common suffixes
   cleanName = cleanName.replace(/\s+HiFi$/i, '').trim();
   cleanName = cleanName.replace(/\s+Main$/i, '').trim();
-  cleanName = cleanName.replace(/\s+LVTD\s*ClrMx$/i, '').trim();  // Also handle after space conversion
+  cleanName = cleanName.replace(/\s+LVTD\s*ClrMx$/i, '').trim();
+
+  // Extract stem part and clean base name for stem files
+  let detectedStemPart = null;
+  if (isStemFile) {
+    const stemSuffixMatch = cleanName.match(/\s+(Bass|Drums?|Perc(?:ussion)?|Vocals?|Vox|BGVs?\d*|Guitar(?:s)?|Keys|Synth(?:s)?|Strings|Horns|Brass|Woodwinds|FX|Pads|Piano|Organ|Choir|Melody|Rhythm|Lead|Backing|Sub|Lo|Hi|Mid|Acoustic|Electric|Ambient|Atmosphere|Click|Full\s*Mix)$/i);
+    if (stemSuffixMatch) {
+      detectedStemPart = stemSuffixMatch[1].trim();
+      cleanName = cleanName.slice(0, stemSuffixMatch.index).trim();
+    }
+  }
   
   if (cleanName.length > 0) {
-    // Determine confidence based on name characteristics
-    let confidence = 0.50;  // Base: generic/unknown format
+    let confidence = 0.50;
     let matchedPattern = 'generic';
     
-    // Boost confidence if has mx_ prefix (likely music)
     if (/^mx_/i.test(nameWithoutExt)) {
       confidence = 0.70;
       matchedPattern = 'generic_mx';
     }
     
-    // Boost if looks like it has a catalog code pattern
     if (/[A-Z]{2,4}\d{2,4}/i.test(nameWithoutExt)) {
       confidence = 0.75;
       matchedPattern = 'generic_catalog';
     }
     
-    return {
+    const result = {
       baseTrackName: cleanName.toLowerCase(),
       displayName: cleanName,
       artist: '',
@@ -891,6 +931,14 @@ function parseAudioFileName(filename) {
       confidence,
       matchedPattern
     };
+    
+    if (detectedStemPart) {
+      result.stemPart = detectedStemPart;
+      result.matchedPattern = 'generic_stem_suffix';
+      result.confidence = Math.max(result.confidence, 0.80);
+    }
+    
+    return result;
   }
   
   return null;
@@ -985,17 +1033,14 @@ function ticksToDuration(ticks, fps = 23.976) {
 function groupStems(clips) {
   const startTime = Date.now();
   
-  // Separate stems from main cues
   const mainCues = clips.filter(c => c.cueType !== 'stem');
   const stems = clips.filter(c => c.cueType === 'stem');
   
-  // Build a map of base track names to main cues
   const mainCueMap = new Map();
   for (const cue of mainCues) {
     mainCueMap.set(cue.baseTrackName, cue);
   }
   
-  // Group stems by their base track name
   const stemGroups = new Map();
   for (const stem of stems) {
     const key = stem.baseTrackName;
@@ -1005,7 +1050,47 @@ function groupStems(clips) {
     stemGroups.get(key).push(stem);
   }
   
-  // Link stems to their parent cues OR create synthetic parent from stems
+  // Normalize for fuzzy matching: strip spaces, hyphens, special chars
+  function normalize(name) {
+    return name.toLowerCase().replace(/[\s\-_'".()]/g, '');
+  }
+  
+  // Find a parent cue using exact match first, then fuzzy containment
+  function findParent(baseName, resultCues) {
+    // Exact match
+    const exact = resultCues.find(r => r.baseTrackName === baseName);
+    if (exact) return exact;
+    
+    const normalizedStem = normalize(baseName);
+    if (normalizedStem.length < 3) return null;
+    
+    // Fuzzy: stem name contains parent name, or vice versa
+    let bestMatch = null;
+    let bestScore = 0;
+    for (const cue of resultCues) {
+      const normalizedParent = normalize(cue.baseTrackName);
+      if (normalizedParent.length < 3) continue;
+      
+      if (normalizedStem === normalizedParent) {
+        return cue;
+      }
+      
+      // Check containment (longer name contains shorter)
+      const longer = normalizedStem.length >= normalizedParent.length ? normalizedStem : normalizedParent;
+      const shorter = normalizedStem.length >= normalizedParent.length ? normalizedParent : normalizedStem;
+      
+      if (longer.includes(shorter) && shorter.length >= 4) {
+        const score = shorter.length / longer.length;
+        if (score > bestScore && score >= 0.5) {
+          bestScore = score;
+          bestMatch = cue;
+        }
+      }
+    }
+    
+    return bestMatch;
+  }
+  
   let linkedStems = 0;
   let createdParents = 0;
   
@@ -1015,7 +1100,7 @@ function groupStems(clips) {
   }));
   
   for (const [baseName, groupStems] of stemGroups) {
-    const existingParent = result.find(r => r.baseTrackName === baseName);
+    const existingParent = findParent(baseName, result);
     
     if (existingParent) {
       // Link stems to existing parent

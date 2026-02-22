@@ -2,6 +2,26 @@
 
 All notable changes to Auris Cue Sheets will be documented in this file.
 
+## [0.15.0] - February 2026
+
+### Fixed
+- **Duration/Cue Length Calculation** - Improved cue length accuracy by filtering muted clips and fixing stem duration grouping.
+- **Import Wizard: Exclusion Toggle** - Excluded cues are now properly filtered out during import.
+- **Muted SFX Filtering** - Muted/disabled tracks in the Premiere timeline are no longer imported.
+- **Stem Detection** - Stem selection now recognizes common instrument names (Bass, Drums, Vocals, Keys, etc.) in addition to explicit STEM keywords.
+- **Stem Grouping** - Stems now fuzzy-match to their parent cues and group correctly, even with slight naming variations.
+- **Timeline Sort Order** - Cues now sort by timeline position (in-point) instead of alphabetically.
+- **Manual Fill-In Click Handler** - Fixed stale-closure bug so the manual fill-in option reliably appears on click in the Actions panel.
+- **Composer/Publisher Separation** - Composer and publisher data are now parsed into their correct respective fields instead of being mixed together.
+- **Track Name Cleaning** - File name parsing strips version numbers, duration suffixes, mix types, and technical tags to show clean track names.
+- **File Tree Workspace Binding** - Tab switching rewritten with stable refs so each project correctly loads its own workspace data.
+
+### Added
+- **Delete/Remove Cue** - Trash icon on hover lets users permanently remove a cue from the sheet (not just toggle visibility).
+- **Global API Key Resolution** - API key resolution now works generically for all sources instead of being hardcoded per provider.
+
+---
+
 ## [0.14.0] - February 2026
 
 ### Fixed

@@ -49,6 +49,8 @@ function App() {
     exportToExcel,
     updateCue,
     batchUpdateCues,
+    removeCue,
+    removeCues,
     autoLookupAll,
     lookupSingleCue,
     importContacts
@@ -201,6 +203,20 @@ function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const isUndoRedoAction = useRef(false);
 
+  // Refs for latest state (avoids stale closures in tab switching callbacks)
+  const cuesRef = useRef(cues);
+  const projectInfoRef = useRef(projectInfo);
+  const cuesHistoryRef = useRef(cuesHistory);
+  const historyIndexRef = useRef(historyIndex);
+  const openTabsRef = useRef([]);
+  const activeTabIdRef = useRef(null);
+  cuesRef.current = cues;
+  projectInfoRef.current = projectInfo;
+  cuesHistoryRef.current = cuesHistory;
+  historyIndexRef.current = historyIndex;
+  openTabsRef.current = openTabs;
+  activeTabIdRef.current = activeTabId;
+
   // Show toast notification
   const showToast = useCallback((message, type = 'success', action = null) => {
     if (toastTimeoutRef.current) {
@@ -285,17 +301,59 @@ function App() {
     return openTabs.find(t => t.id === activeTabId) || null;
   }, [openTabs, activeTabId]);
 
-  // Open a new tab for a project
+  // Switch to a tab (uses refs to avoid stale closures)
+  const switchTab = useCallback((tabId) => {
+    const currentTabId = activeTabIdRef.current;
+    if (tabId === currentTabId) return;
+    
+    // Save current tab state before switching
+    const currentCues = cuesRef.current;
+    const currentProjectInfo = projectInfoRef.current;
+    const currentHistory = cuesHistoryRef.current;
+    const currentHistoryIndex = historyIndexRef.current;
+    
+    setOpenTabs(prev => {
+      let updated = prev;
+      if (currentTabId) {
+        updated = prev.map(t => 
+          t.id === currentTabId 
+            ? { 
+                ...t, 
+                cues: [...currentCues],
+                projectInfo: { ...currentProjectInfo },
+                undoHistory: [...currentHistory],
+                historyIndex: currentHistoryIndex
+              }
+            : t
+        );
+      }
+      
+      // Load new tab state from the freshest openTabs
+      const newTab = updated.find(t => t.id === tabId);
+      if (newTab) {
+        setActiveTabId(tabId);
+        setActiveProjectId(newTab.projectId);
+        setCues(newTab.cues);
+        setProjectInfo(newTab.projectInfo);
+        setCuesHistory(newTab.undoHistory || []);
+        setHistoryIndex(newTab.historyIndex || -1);
+      }
+      
+      return updated;
+    });
+  }, [setCues, setProjectInfo]);
+
+  // Open a new tab for a project (uses refs to avoid stale closures)
   const openNewTab = useCallback(async (projectId, projectName = null) => {
-    // Check if already open
-    const existingTab = openTabs.find(t => t.projectId === projectId);
+    // Check if already open using ref for latest state
+    const currentTabs = openTabsRef.current;
+    const existingTab = currentTabs.find(t => t.projectId === projectId);
     if (existingTab) {
-      setActiveTabId(existingTab.id);
+      switchTab(existingTab.id);
       return existingTab.id;
     }
     
-    // Check max tabs
-    if (openTabs.length >= MAX_TABS) {
+    if (currentTabs.length >= MAX_TABS) {
       showToast(`Maximum ${MAX_TABS} tabs open`, 'warning');
       return null;
     }
@@ -306,7 +364,6 @@ function App() {
     if (window.electronAPI) {
       cueSheetData = await window.electronAPI.getCueSheet(projectId);
       if (cueSheetData) {
-        // Prefer cue sheet name, then projectInfo.projectName, then passed projectName
         name = cueSheetData.name || cueSheetData.projectInfo?.projectName || projectName || 'Untitled';
       }
     }
@@ -327,10 +384,32 @@ function App() {
       isDirty: false
     };
     
-    setOpenTabs(prev => [...prev, newTab]);
-    setActiveTabId(newTab.id);
+    // Save current tab state before switching, then add new tab
+    const currentTabId = activeTabIdRef.current;
+    const currentCues = cuesRef.current;
+    const currentProjectInfo = projectInfoRef.current;
+    const currentHistory = cuesHistoryRef.current;
+    const currentHistoryIndex = historyIndexRef.current;
     
-    // Also set the active project ID and load cues into main state
+    setOpenTabs(prev => {
+      let updated = prev;
+      if (currentTabId) {
+        updated = prev.map(t => 
+          t.id === currentTabId 
+            ? { 
+                ...t, 
+                cues: [...currentCues],
+                projectInfo: { ...currentProjectInfo },
+                undoHistory: [...currentHistory],
+                historyIndex: currentHistoryIndex
+              }
+            : t
+        );
+      }
+      return [...updated, newTab];
+    });
+    
+    setActiveTabId(newTab.id);
     setActiveProjectId(projectId);
     setCues(newTab.cues);
     setProjectInfo(newTab.projectInfo);
@@ -338,70 +417,39 @@ function App() {
     setHistoryIndex(-1);
     
     return newTab.id;
-  }, [openTabs, MAX_TABS, showToast, setCues, setProjectInfo]);
+  }, [MAX_TABS, showToast, setCues, setProjectInfo, switchTab]);
 
-  // Close a tab
+  // Close a tab (uses refs for latest state)
   const closeTab = useCallback((tabId) => {
-    const tabIndex = openTabs.findIndex(t => t.id === tabId);
-    if (tabIndex === -1) return;
-    
-    const newTabs = openTabs.filter(t => t.id !== tabId);
-    setOpenTabs(newTabs);
-    
-    // If closing active tab, switch to another
-    if (tabId === activeTabId) {
-      if (newTabs.length > 0) {
-        // Switch to previous tab or first tab
-        const newActiveIndex = Math.min(tabIndex, newTabs.length - 1);
-        const newActiveTab = newTabs[newActiveIndex];
-        setActiveTabId(newActiveTab.id);
-        setActiveProjectId(newActiveTab.projectId);
-        setCues(newActiveTab.cues);
-        setProjectInfo(newActiveTab.projectInfo);
-        setCuesHistory(newActiveTab.undoHistory || []);
-        setHistoryIndex(newActiveTab.historyIndex || -1);
-      } else {
-        // No tabs left
-        setActiveTabId(null);
-        setActiveProjectId(null);
-        setCues([]);
-        setProjectInfo({});
-        setCuesHistory([]);
-        setHistoryIndex(-1);
+    setOpenTabs(prev => {
+      const tabIndex = prev.findIndex(t => t.id === tabId);
+      if (tabIndex === -1) return prev;
+      
+      const newTabs = prev.filter(t => t.id !== tabId);
+      
+      if (tabId === activeTabIdRef.current) {
+        if (newTabs.length > 0) {
+          const newActiveIndex = Math.min(tabIndex, newTabs.length - 1);
+          const newActiveTab = newTabs[newActiveIndex];
+          setActiveTabId(newActiveTab.id);
+          setActiveProjectId(newActiveTab.projectId);
+          setCues(newActiveTab.cues);
+          setProjectInfo(newActiveTab.projectInfo);
+          setCuesHistory(newActiveTab.undoHistory || []);
+          setHistoryIndex(newActiveTab.historyIndex || -1);
+        } else {
+          setActiveTabId(null);
+          setActiveProjectId(null);
+          setCues([]);
+          setProjectInfo({});
+          setCuesHistory([]);
+          setHistoryIndex(-1);
+        }
       }
-    }
-  }, [openTabs, activeTabId, setCues, setProjectInfo]);
-
-  // Switch to a tab
-  const switchTab = useCallback((tabId) => {
-    if (tabId === activeTabId) return;
-    
-    // Save current tab state before switching
-    if (activeTabId) {
-      setOpenTabs(prev => prev.map(t => 
-        t.id === activeTabId 
-          ? { 
-              ...t, 
-              cues: [...cues],
-              projectInfo: { ...projectInfo },
-              undoHistory: [...cuesHistory],
-              historyIndex
-            }
-          : t
-      ));
-    }
-    
-    // Load new tab state
-    const newTab = openTabs.find(t => t.id === tabId);
-    if (newTab) {
-      setActiveTabId(tabId);
-      setActiveProjectId(newTab.projectId);
-      setCues(newTab.cues);
-      setProjectInfo(newTab.projectInfo);
-      setCuesHistory(newTab.undoHistory || []);
-      setHistoryIndex(newTab.historyIndex || -1);
-    }
-  }, [activeTabId, openTabs, cues, projectInfo, cuesHistory, historyIndex, setCues, setProjectInfo]);
+      
+      return newTabs;
+    });
+  }, [setCues, setProjectInfo]);
 
   // Update active tab's cues (called when cues change)
   useEffect(() => {
@@ -1271,20 +1319,19 @@ function App() {
   }, [cues, handleRowClick]);
 
   const handleSelectProject = useCallback(async (id, openInNewTab = false) => {
-    // If double-click or explicit new tab request, open in new tab
     if (openInNewTab) {
       await openNewTab(id);
       return;
     }
     
-    // Single click - if tab exists, switch to it; otherwise open new tab
-    const existingTab = openTabs.find(t => t.projectId === id);
+    // Use ref for latest openTabs to avoid stale closures
+    const existingTab = openTabsRef.current.find(t => t.projectId === id);
     if (existingTab) {
       switchTab(existingTab.id);
     } else {
       await openNewTab(id);
     }
-  }, [openTabs, openNewTab, switchTab, projects]);
+  }, [openNewTab, switchTab]);
 
   // Open browser for manual lookup (single track)
   const handleOpenBrowser = useCallback((cue) => {
@@ -1672,6 +1719,7 @@ function App() {
                   cues={cues}
                   onUpdateCue={updateCue}
                   onBatchUpdateCues={batchUpdateCues}
+                  onRemoveCue={removeCue}
                   onLookupCue={lookupSingleCue}
                   isLoading={isLoading}
                   isLookingUp={isLookingUp}

@@ -88,12 +88,15 @@ const DEFAULT_SOURCES = {
   },
 };
 
+const LEGACY_KEY_NAMES = { opus: 'anthropic_api_key', voyage: 'voyage_api_key' };
+
 class CloudSourcesManager {
   constructor() {
     this.cachedSources = null;
     this.realtimeSubscription = null;
     this.changeCallbacks = [];
-    this.localConfig = {}; // For storing API keys locally (not in cloud)
+    this.localConfig = {};
+    this.globalKeys = {};
   }
 
   /**
@@ -153,11 +156,31 @@ class CloudSourcesManager {
         }
       }
 
+      this._applyGlobalKeys(merged);
       this.cachedSources = merged;
       return merged;
     } catch (e) {
       console.error('[CloudSources] Error getting sources:', e);
+      this._applyGlobalKeys(merged);
       return merged;
+    }
+  }
+
+  /**
+   * For every source that requires a key but has none set locally,
+   * fill in the global key from app_config as a fallback.
+   */
+  _applyGlobalKeys(sources) {
+    for (const [id, source] of Object.entries(sources)) {
+      const needsKey = source.requiresKey || source.requires_key;
+      if (!needsKey) continue;
+      const hasLocal = source.config?.apiKey;
+      if (hasLocal) continue;
+      const globalKey = this._resolveGlobalKey(id);
+      if (globalKey) {
+        source.config = source.config || {};
+        source.config.apiKey = globalKey;
+      }
     }
   }
 
@@ -386,6 +409,25 @@ class CloudSourcesManager {
   async getSourcesByCategory(category) {
     const sources = await this.getSources();
     return Object.values(sources).filter(s => s.category === category);
+  }
+
+  /**
+   * Accept global keys fetched from Supabase app_config.
+   * These are applied as fallback API keys for any source that requires one.
+   */
+  setGlobalKeys(keys) {
+    this.globalKeys = keys || {};
+  }
+
+  /**
+   * Resolve the global API key for a source using legacy then generic naming.
+   */
+  _resolveGlobalKey(sourceId) {
+    const legacy = LEGACY_KEY_NAMES[sourceId];
+    if (legacy && this.globalKeys[legacy]) return this.globalKeys[legacy];
+    const generic = `${sourceId}_api_key`;
+    if (this.globalKeys[generic]) return this.globalKeys[generic];
+    return '';
   }
 
   /**

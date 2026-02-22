@@ -35,6 +35,11 @@ CREATE POLICY "Authenticated users can update config"
 
 -- ============================================
 -- Seed rows for API keys (set values in Supabase dashboard)
+-- Convention: {sourceId}_api_key  (e.g. opus_api_key, alibi_api_key)
+-- Legacy keys (anthropic_api_key, voyage_api_key) are kept for
+-- backward compatibility; resolveApiKey() checks both legacy and
+-- generic names.  New custom sources added via the admin UI will
+-- automatically create rows using the generic pattern.
 -- ============================================
 INSERT INTO app_config (key, value) VALUES
   ('anthropic_api_key', ''),
