@@ -23,13 +23,6 @@ exports.default = async function notarizing(context) {
     return;
   }
 
-  // Skip if not signing (e.g., local dev builds)
-  if (!process.env.APPLE_ID || !process.env.APPLE_APP_SPECIFIC_PASSWORD || !process.env.APPLE_TEAM_ID) {
-    console.log('Skipping notarization - Apple credentials not configured');
-    console.log('Set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID to enable notarization');
-    return;
-  }
-
   const appName = context.packager.appInfo.productFilename;
   const appPath = path.join(appOutDir, `${appName}.app`);
 
@@ -40,9 +33,7 @@ exports.default = async function notarizing(context) {
     await notarize({
       tool: 'notarytool',
       appPath,
-      appleId: process.env.APPLE_ID,
-      appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
-      teamId: process.env.APPLE_TEAM_ID,
+      keychainProfile: 'AurisCueSheets',
     });
     console.log('Notarization complete!');
   } catch (error) {
