@@ -2590,11 +2590,71 @@ ipcMain.handle('sources:toggle', async (event, sourceId, enabled) => {
 });
 
 ipcMain.handle('sources:testConnection', async (event, sourceId) => {
-  return sourcesManager.testConnection(sourceId);
+  const localSources = sourcesManager.loadSources();
+  if (localSources[sourceId]) {
+    return sourcesManager.testConnection(sourceId);
+  }
+  const cloudSource = await cloudSourcesManager.getSource(sourceId);
+  if (cloudSource) {
+    const needsKey = cloudSource.requiresKey || cloudSource.requires_key;
+    const apiKey = cloudSource.config?.apiKey;
+    if (needsKey && !apiKey) {
+      return { success: false, error: 'API key not configured' };
+    }
+    if (needsKey && apiKey) {
+      const testUrl = cloudSource.searchUrl || cloudSource.search_url || cloudSource.testUrl || cloudSource.test_url;
+      const { default: fetch } = await import('node-fetch').catch(() => ({ default: globalThis.fetch }));
+      if (!testUrl) return { success: true };
+      try {
+        const resp = await fetch(testUrl, {
+          headers: { 'Authorization': `Bearer ${apiKey}`, 'X-API-Key': apiKey },
+          signal: AbortSignal.timeout(10000)
+        });
+        return resp.ok || (resp.status >= 400 && resp.status < 500)
+          ? { success: true }
+          : { success: false, error: `Server error (${resp.status})` };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+    }
+    return { success: true };
+  }
+  return { success: false, error: 'Source not found' };
 });
 
 ipcMain.handle('sources:testAll', async () => {
-  return sourcesManager.testAllConnections();
+  const localResults = await sourcesManager.testAllConnections();
+  const cloudSources = await cloudSourcesManager.getSources();
+  for (const [id, source] of Object.entries(cloudSources)) {
+    if (localResults[id] !== undefined) continue;
+    if (!source.enabled) continue;
+    const needsKey = source.requiresKey || source.requires_key;
+    if (needsKey && !source.config?.apiKey) {
+      localResults[id] = { success: false, error: 'API key not configured' };
+      continue;
+    }
+    if (needsKey && source.config?.apiKey) {
+      const testUrl = source.searchUrl || source.search_url || source.testUrl || source.test_url;
+      if (!testUrl) {
+        localResults[id] = { success: true };
+        continue;
+      }
+      try {
+        const resp = await fetch(testUrl, {
+          headers: { 'Authorization': `Bearer ${source.config.apiKey}`, 'X-API-Key': source.config.apiKey },
+          signal: AbortSignal.timeout(10000)
+        });
+        localResults[id] = resp.ok || (resp.status >= 400 && resp.status < 500)
+          ? { success: true }
+          : { success: false, error: `Server error (${resp.status})` };
+      } catch (e) {
+        localResults[id] = { success: false, error: e.message };
+      }
+    } else {
+      localResults[id] = { success: true };
+    }
+  }
+  return localResults;
 });
 
 // ==========================================

@@ -258,7 +258,14 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
     try {
       if (window.electronAPI) {
         if (sourceId === 'all') {
-          await window.electronAPI.testAllConnections();
+          const results = await window.electronAPI.testAllConnections();
+          if (results) {
+            const updated = {};
+            for (const [id, result] of Object.entries(results)) {
+              updated[id] = result.success ? 'connected' : 'error';
+            }
+            setGlobalKeyTestResult(prev => ({ ...prev, ...updated }));
+          }
         } else {
           await window.electronAPI.testConnection(sourceId);
         }

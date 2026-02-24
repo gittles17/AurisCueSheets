@@ -1,0 +1,56 @@
+---
+description: Rules for building and releasing Electron app to GitHub Releases with auto-update support
+globs: cue-sheet-app/scripts/release.js
+alwaysApply: false
+---
+
+# Electron Release: Asset Naming for Auto-Update
+
+When uploading release assets to GitHub for electron-updater auto-update:
+
+## The Problem
+
+GitHub sanitizes uploaded filenames (spaces become dots). If local files have spaces (e.g., `Auris Cue Sheets-v0.16.0-arm64.zip`), GitHub renames them to `Auris.Cue.Sheets-v0.16.0-arm64.zip`. This breaks `latest-mac.yml` references and the auto-updater download stalls at 0%.
+
+## The Fix
+
+Always rename files to use hyphens BEFORE uploading. The asset names on GitHub must exactly match the URLs in `latest-mac.yml`.
+
+```bash
+# 1. Copy build artifacts to hyphenated names
+cp "/tmp/auris-build/Auris Cue Sheets-v${VERSION}-arm64.zip" "/tmp/auris-build/Auris-Cue-Sheets-v${VERSION}-arm64-mac.zip"
+cp "/tmp/auris-build/Auris Cue Sheets-v${VERSION}-x64.zip"   "/tmp/auris-build/Auris-Cue-Sheets-v${VERSION}-x64-mac.zip"
+cp "/tmp/auris-build/Auris Cue Sheets-v${VERSION}-arm64.dmg" "/tmp/auris-build/Auris-Cue-Sheets-v${VERSION}-arm64.dmg"
+cp "/tmp/auris-build/Auris Cue Sheets-v${VERSION}-x64.dmg"   "/tmp/auris-build/Auris-Cue-Sheets-v${VERSION}-x64.dmg"
+
+# 2. Upload the hyphenated copies (NOT the originals with spaces)
+gh release upload v${VERSION} \
+  "/tmp/auris-build/Auris-Cue-Sheets-v${VERSION}-arm64.dmg" \
+  "/tmp/auris-build/Auris-Cue-Sheets-v${VERSION}-x64.dmg" \
+  "/tmp/auris-build/Auris-Cue-Sheets-v${VERSION}-arm64-mac.zip" \
+  "/tmp/auris-build/Auris-Cue-Sheets-v${VERSION}-x64-mac.zip" \
+  "/tmp/auris-build/latest-mac.yml"
+```
+
+## latest-mac.yml URL format
+
+The `url` fields must use the exact GitHub asset names (hyphens, `-mac` suffix on ZIPs):
+
+```yaml
+files:
+  - url: Auris-Cue-Sheets-v0.16.0-arm64-mac.zip  # NOT spaces, NOT dots
+    sha512: ...
+    size: ...
+    arch: arm64
+  - url: Auris-Cue-Sheets-v0.16.0-x64-mac.zip
+    sha512: ...
+    size: ...
+    arch: x64
+```
+
+## Verification
+
+After uploading, always verify names match:
+```bash
+gh release view v${VERSION} --json assets --jq '.assets[].name'
+```
