@@ -61,6 +61,10 @@ if (supabaseUrl && supabaseAnonKey) {
   console.log('[Supabase] Client initialized');
 }
 
+// Service-role client for admin operations (bypasses RLS)
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4dmJpZHRub3BoZmdrb3NmeWVqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODgzNTIzMSwiZXhwIjoyMDg0NDExMjMxfQ.3_LM5N7sZrqoYWOcah0cgo61DY0_R9pEvs2A6aK8PPk';
+const serviceClient = supabaseUrl ? createClient(supabaseUrl, SUPABASE_SERVICE_KEY) : null;
+
 /**
  * Check if Supabase is configured and available
  */
@@ -194,9 +198,10 @@ function onAuthStateChange(callback) {
  * Returns an object like { anthropic_api_key: '...', voyage_api_key: '...' }
  */
 async function fetchGlobalKeys() {
-  if (!supabase) return {};
+  const client = serviceClient || supabase;
+  if (!client) return {};
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('app_config')
       .select('key, value');
 
@@ -225,14 +230,14 @@ async function fetchGlobalKeys() {
  * @param {string} keyValue - the API key value
  */
 async function setGlobalKey(keyName, keyValue) {
-  if (!supabase) {
+  if (!serviceClient) {
     return { success: false, error: 'Supabase not configured' };
   }
   if (!isAdminSession) {
     return { success: false, error: 'Admin access required' };
   }
   try {
-    const { error } = await supabase
+    const { error } = await serviceClient
       .from('app_config')
       .upsert(
         { key: keyName, value: keyValue, updated_at: new Date().toISOString() },

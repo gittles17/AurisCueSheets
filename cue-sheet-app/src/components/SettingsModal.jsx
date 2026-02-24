@@ -1,27 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Database, Gear, Info, X, CircleNotch, Eye, EyeSlash, Check, Table, Trash, MagnifyingGlass, Warning, ChatCircle, Pencil, Lightning, Brain, Buildings } from '@phosphor-icons/react';
+import { Database, Info, X, CircleNotch, Check, Table, Trash, MagnifyingGlass, Warning, ChatCircle, Pencil, Lightning, Brain } from '@phosphor-icons/react';
 import SourcesPanel from './SourcesPanel';
-import AddSourceModal from './AddSourceModal';
 import AdminFeedbackPanel from './AdminFeedbackPanel';
 import EditTrackModal from './EditTrackModal';
 import { useAuth } from '../contexts/AuthContext';
 
 function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
   const { isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState('general');
-  const [configModal, setConfigModal] = useState(null);
-  const [configValues, setConfigValues] = useState({});
+  const [activeTab, setActiveTab] = useState('sources');
   const [isTesting, setIsTesting] = useState(false);
-  const [claudeApiKey, setClaudeApiKey] = useState('');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [apiKeySaved, setApiKeySaved] = useState(false);
   const [mounted, setMounted] = useState(false);
   
-  // Voyage AI state
-  const [voyageApiKey, setVoyageApiKey] = useState('');
-  const [showVoyageApiKey, setShowVoyageApiKey] = useState(false);
-  const [voyageApiKeySaved, setVoyageApiKeySaved] = useState(false);
+  // Voyage embedding state
   const [isEmbedding, setIsEmbedding] = useState(false);
   const [embedProgress, setEmbedProgress] = useState(null);
   const [trackCounts, setTrackCounts] = useState({ total: 0, withEmbedding: 0 });
@@ -33,20 +24,18 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearConfirmText, setClearConfirmText] = useState('');
   
-  // Add/Edit source modal state
-  const [showAddSourceModal, setShowAddSourceModal] = useState(false);
-  const [editSourceId, setEditSourceId] = useState(null);
-  const [addSourceCategory, setAddSourceCategory] = useState('smartlookup');
-  
   // Edit track modal state
   const [showEditTrackModal, setShowEditTrackModal] = useState(false);
   const [editingTrack, setEditingTrack] = useState(null);
   
-  // Global keys (admin) state - dynamic for all sources that require keys
+  // Global API keys state (shared with SourcesPanel)
   const [globalKeyValues, setGlobalKeyValues] = useState({});
   const [globalKeyVisibility, setGlobalKeyVisibility] = useState({});
   const [globalKeySaving, setGlobalKeySaving] = useState(null);
   const [globalKeySaved, setGlobalKeySaved] = useState(null);
+  const [globalKeyError, setGlobalKeyError] = useState(null);
+  const [globalKeyTesting, setGlobalKeyTesting] = useState(null);
+  const [globalKeyTestResult, setGlobalKeyTestResult] = useState({});
   const [isLoadingGlobalKeys, setIsLoadingGlobalKeys] = useState(false);
   const [keySources, setKeySources] = useState([]);
   
@@ -60,23 +49,6 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
     return () => setMounted(false);
   }, []);
 
-  useEffect(() => {
-    if (!isOpen) {
-      setConfigModal(null);
-      setConfigValues({});
-    }
-  }, [isOpen]);
-
-  // Load Claude API key from sources when modal opens
-  useEffect(() => {
-    if (isOpen && sources?.opus?.config?.apiKey) {
-      setClaudeApiKey(sources.opus.config.apiKey);
-    }
-    if (isOpen && sources?.voyage?.config?.apiKey) {
-      setVoyageApiKey(sources.voyage.config.apiKey);
-    }
-  }, [isOpen, sources]);
-  
   // Listen for embedding progress
   useEffect(() => {
     if (!window.electronAPI?.onVoyageEmbedProgress) return;
@@ -86,7 +58,7 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
   
   // Load track counts when settings opens
   useEffect(() => {
-    if (isOpen && activeTab === 'general' && window.electronAPI?.voyageGetTrackCount) {
+    if (isOpen && activeTab === 'sources' && window.electronAPI?.voyageGetTrackCount) {
       window.electronAPI.voyageGetTrackCount().then(setTrackCounts);
     }
   }, [isOpen, activeTab]);
@@ -94,14 +66,15 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
   const LEGACY_KEY_NAMES = { opus: 'anthropic_api_key', voyage: 'voyage_api_key' };
   const getGlobalKeyName = (sourceId) => LEGACY_KEY_NAMES[sourceId] || `${sourceId}_api_key`;
 
+  // Load all API keys and sources that require keys
   useEffect(() => {
-    if (!isOpen || !isAdmin || activeTab !== 'general' || !window.electronAPI?.globalKeysGet) return;
+    if (!isOpen || activeTab !== 'sources' || !window.electronAPI?.globalKeysGet) return;
     setIsLoadingGlobalKeys(true);
 
     const fetchSources = window.electronAPI.cloudSourcesGet?.() || Promise.resolve({});
-    const fetchKeys = window.electronAPI.globalKeysFetch().catch(() =>
-      window.electronAPI.globalKeysGet()
-    );
+    const fetchKeys = (isAdmin && window.electronAPI.globalKeysFetch)
+      ? window.electronAPI.globalKeysFetch().catch(() => window.electronAPI.globalKeysGet())
+      : window.electronAPI.globalKeysGet();
 
     Promise.all([fetchSources, fetchKeys]).then(([cloudSources, keys]) => {
       const srcList = Object.values(cloudSources || {})
@@ -109,15 +82,21 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
         .map(s => ({
           id: s.id,
           name: s.name,
-          keyName: getGlobalKeyName(s.id)
+          keyName: getGlobalKeyName(s.id),
+          status: s.status || sources?.[s.id]?.status || 'not_setup'
         }));
       setKeySources(srcList);
 
       const values = {};
+      const testResults = {};
       for (const src of srcList) {
         values[src.keyName] = keys[src.keyName] || '';
+        if (src.status === 'connected') testResults[src.id] = 'connected';
+        else if (src.status === 'error') testResults[src.id] = 'error';
+        else if (values[src.keyName]) testResults[src.id] = 'configured';
       }
       setGlobalKeyValues(values);
+      setGlobalKeyTestResult(testResults);
     }).finally(() => setIsLoadingGlobalKeys(false));
   }, [isOpen, isAdmin, activeTab]);
   
@@ -266,27 +245,6 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
 
   if (!isOpen || !mounted) return null;
 
-  const handleConfigureSource = (sourceId) => {
-    const sourceConfig = sources[sourceId]?.config || {};
-    setConfigValues(sourceConfig);
-    setConfigModal(sourceId);
-  };
-
-  const handleSaveConfig = async () => {
-    if (configModal && window.electronAPI) {
-      try {
-        await window.electronAPI.updateSourceConfig(configModal, configValues);
-        await window.electronAPI.testConnection(configModal);
-        const updatedSources = await window.electronAPI.getSources();
-        onUpdateSources?.(updatedSources);
-        setConfigModal(null);
-        setConfigValues({});
-      } catch (error) {
-        console.error('Failed to save config:', error);
-      }
-    }
-  };
-
   const handleToggleSource = async (sourceId, enabled) => {
     if (window.electronAPI) {
       await window.electronAPI.toggleSource(sourceId, enabled);
@@ -312,56 +270,6 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
     }
   };
 
-  const handleAddSource = (category) => {
-    setAddSourceCategory(category);
-    setEditSourceId(null);
-    setShowAddSourceModal(true);
-  };
-
-  const handleEditSource = async (sourceId) => {
-    // Fetch source data for editing
-    try {
-      const cloudSources = await window.electronAPI.cloudSourcesGet();
-      const sourceData = cloudSources?.[sourceId];
-      setEditSourceId(sourceData || { id: sourceId });
-      setShowAddSourceModal(true);
-    } catch (err) {
-      console.error('Failed to load source for editing:', err);
-    }
-  };
-
-  const handleAddSourceClose = (success) => {
-    setShowAddSourceModal(false);
-    setEditSourceId(null);
-    // Refresh sources if save was successful
-    if (success && window.electronAPI) {
-      window.electronAPI.getSources().then(updatedSources => {
-        onUpdateSources?.(updatedSources);
-      });
-    }
-  };
-
-  const handleSaveClaudeApiKey = async () => {
-    if (window.electronAPI) {
-      await window.electronAPI.updateSourceConfig('opus', { apiKey: claudeApiKey });
-      await window.electronAPI.testConnection('opus');
-      const updatedSources = await window.electronAPI.getSources();
-      onUpdateSources?.(updatedSources);
-      setApiKeySaved(true);
-      setTimeout(() => setApiKeySaved(false), 2000);
-    }
-  };
-  
-  const handleSaveVoyageApiKey = async () => {
-    if (window.electronAPI) {
-      await window.electronAPI.updateSourceConfig('voyage', { apiKey: voyageApiKey });
-      const updatedSources = await window.electronAPI.getSources();
-      onUpdateSources?.(updatedSources);
-      setVoyageApiKeySaved(true);
-      setTimeout(() => setVoyageApiKeySaved(false), 2000);
-    }
-  };
-  
   const handleEmbedMissing = async (forceAll = false) => {
     if (!window.electronAPI?.voyageEmbedMissing) return;
     setIsEmbedding(true);
@@ -370,7 +278,6 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
       const result = await window.electronAPI.voyageEmbedMissing(forceAll);
       if (result.success) {
         setEmbedProgress({ ...result, done: true });
-        // Refresh track counts
         if (window.electronAPI?.voyageGetTrackCount) {
           const counts = await window.electronAPI.voyageGetTrackCount();
           setTrackCounts(counts);
@@ -382,62 +289,77 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
     setIsEmbedding(false);
   };
 
-  const handleSaveGlobalKey = async (keyName, keyValue) => {
+  const handleSaveGlobalKey = async (sourceId, keyName, keyValue) => {
     if (!window.electronAPI?.globalKeysSet) return;
     setGlobalKeySaving(keyName);
+    setGlobalKeyError(null);
     try {
       const result = await window.electronAPI.globalKeysSet(keyName, keyValue);
       if (result.success) {
-        // Re-fetch so sources-manager picks up the new key
         await window.electronAPI.globalKeysFetch();
-        const updatedSources = await window.electronAPI.getSources();
-        onUpdateSources?.(updatedSources);
         setGlobalKeySaved(keyName);
         setTimeout(() => setGlobalKeySaved(null), 2000);
+
+        // Run live health check
+        setGlobalKeyTesting(sourceId);
+        try {
+          const testResult = await window.electronAPI.testConnection(sourceId);
+          setGlobalKeyTestResult(prev => ({
+            ...prev,
+            [sourceId]: testResult.success ? 'connected' : 'error'
+          }));
+          if (!testResult.success) {
+            setGlobalKeyError(`${sourceId}: ${testResult.error || 'Connection test failed'}`);
+            setTimeout(() => setGlobalKeyError(null), 4000);
+          }
+        } catch {
+          setGlobalKeyTestResult(prev => ({ ...prev, [sourceId]: 'error' }));
+        }
+        setGlobalKeyTesting(null);
+
+        const updatedSources = await window.electronAPI.getSources();
+        onUpdateSources?.(updatedSources);
+      } else {
+        setGlobalKeyError(result.error || 'Failed to save key');
+        setTimeout(() => setGlobalKeyError(null), 4000);
       }
     } catch (e) {
-      console.error('Failed to save global key:', e);
+      setGlobalKeyError(e.message || 'Failed to save key');
+      setTimeout(() => setGlobalKeyError(null), 4000);
     } finally {
       setGlobalKeySaving(null);
     }
   };
 
-  const getConfigFields = (sourceId) => {
-    switch (sourceId) {
-      case 'opus':
-        return [
-          { key: 'apiKey', label: 'Anthropic API Key', type: 'password', placeholder: 'sk-ant-api03-...' }
-        ];
-      case 'spotify':
-        return [
-          { key: 'clientId', label: 'Client ID', type: 'text', placeholder: 'Enter Spotify Client ID' },
-          { key: 'clientSecret', label: 'Client Secret', type: 'password', placeholder: 'Enter Spotify Client Secret' }
-        ];
-      case 'discogs':
-        return [
-          { key: 'token', label: 'Personal Access Token', type: 'password', placeholder: 'Enter Discogs Token' }
-        ];
-      default:
-        // For custom sources, provide a generic API key field
-        return [
-          { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Enter API key' }
-        ];
+  const handleTestGlobalKey = async (sourceId) => {
+    setGlobalKeyTesting(sourceId);
+    try {
+      const testResult = await window.electronAPI.testConnection(sourceId);
+      setGlobalKeyTestResult(prev => ({
+        ...prev,
+        [sourceId]: testResult.success ? 'connected' : 'error'
+      }));
+      if (!testResult.success) {
+        setGlobalKeyError(`${sourceId}: ${testResult.error || 'Connection test failed'}`);
+        setTimeout(() => setGlobalKeyError(null), 4000);
+      }
+      const updatedSources = await window.electronAPI.getSources();
+      onUpdateSources?.(updatedSources);
+    } catch {
+      setGlobalKeyTestResult(prev => ({ ...prev, [sourceId]: 'error' }));
+    } finally {
+      setGlobalKeyTesting(null);
     }
   };
 
   const tabs = [
-    { id: 'general', label: 'General', icon: <Gear size={18} weight="thin" /> },
+    { id: 'sources', label: 'Sources', icon: <Database size={18} weight="thin" /> },
     { id: 'learned', label: 'Learned Data', icon: <Table size={18} weight="thin" /> },
     { id: 'patterns', label: 'Patterns', icon: <Brain size={18} weight="thin" /> },
-    { id: 'sources', label: 'Sources', icon: <Database size={18} weight="thin" /> },
     ...(isAdmin ? [{ id: 'feedback', label: 'Feedback', icon: <ChatCircle size={18} weight="thin" /> }] : []),
     { id: 'about', label: 'About', icon: <Info size={18} weight="thin" /> }
   ];
 
-  // Get Opus connection status
-  const opusStatus = sources?.opus?.status;
-  const isOpusConnected = opusStatus === 'connected';
-  
   return createPortal(
     <>
       <div 
@@ -493,235 +415,6 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
 
             {/* Tab Content */}
             <div className="flex-1 overflow-y-auto">
-              {activeTab === 'general' && (
-                <div className="p-4">
-                  {/* Claude API Key - Primary setting */}
-                  <div className="bg-auris-card/50 rounded-lg p-4 border border-auris-border">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-medium">Claude API Key</h3>
-                      {isOpusConnected ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-auris-green-dim text-auris-green">
-                          Connected
-                        </span>
-                      ) : claudeApiKey ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-auris-orange-dim text-auris-orange">
-                          Not verified
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="text-xs text-auris-text-muted mb-3">
-                      Powers AI-assisted metadata extraction
-                    </p>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <input
-                          type={showApiKey ? 'text' : 'password'}
-                          value={claudeApiKey}
-                          onChange={(e) => setClaudeApiKey(e.target.value)}
-                          placeholder="sk-ant-api03-..."
-                          className="input w-full pr-8 font-mono text-xs py-2"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowApiKey(!showApiKey)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-auris-text-muted hover:text-auris-text transition-colors"
-                        >
-                          {showApiKey ? <EyeSlash size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
-                      <button
-                        onClick={handleSaveClaudeApiKey}
-                        className="btn btn-primary px-3 py-2 text-xs"
-                        disabled={!claudeApiKey}
-                      >
-                        {apiKeySaved ? (
-                          <span className="flex items-center gap-1">
-                            <Check size={14} weight="bold" />
-                            Saved
-                          </span>
-                        ) : (
-                          'Save'
-                        )}
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-auris-text-muted mt-2">
-                      Get your key at{' '}
-                      <a 
-                        href="https://console.anthropic.com/settings/keys" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-auris-blue hover:underline"
-                      >
-                        console.anthropic.com
-                      </a>
-                    </p>
-                  </div>
-                  
-                  {/* Voyage AI API Key */}
-                  <div className="bg-auris-card/50 rounded-lg p-4 border border-auris-border mt-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-medium">Voyage AI API Key</h3>
-                      {voyageApiKey ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-auris-green-dim text-auris-green">
-                          Configured
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="text-xs text-auris-text-muted mb-3">
-                      Fast vector search for track lookups (optional)
-                    </p>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <input
-                          type={showVoyageApiKey ? 'text' : 'password'}
-                          value={voyageApiKey}
-                          onChange={(e) => setVoyageApiKey(e.target.value)}
-                          placeholder="pa-..."
-                          className="input w-full pr-8 font-mono text-xs py-2"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowVoyageApiKey(!showVoyageApiKey)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-auris-text-muted hover:text-auris-text transition-colors"
-                        >
-                          {showVoyageApiKey ? <EyeSlash size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
-                      <button
-                        onClick={handleSaveVoyageApiKey}
-                        className="btn btn-primary px-3 py-2 text-xs"
-                        disabled={!voyageApiKey}
-                      >
-                        {voyageApiKeySaved ? (
-                          <span className="flex items-center gap-1">
-                            <Check size={14} weight="bold" />
-                            Saved
-                          </span>
-                        ) : (
-                          'Save'
-                        )}
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-auris-text-muted mt-2">
-                      Get your key at{' '}
-                      <a 
-                        href="https://dash.voyageai.com/api-keys" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-auris-blue hover:underline"
-                      >
-                        dash.voyageai.com
-                      </a>
-                    </p>
-                    
-                    {/* Embed existing tracks button */}
-                    {voyageApiKey && (
-                      <div className="mt-3 pt-3 border-t border-auris-border/50">
-                        <div className="mb-2">
-                          <p className="text-xs text-auris-text">Vector Embeddings</p>
-                          <p className="text-[10px] text-auris-text-muted">
-                            {trackCounts.total > 0 
-                              ? `${trackCounts.withEmbedding} of ${trackCounts.total} tracks have embeddings`
-                              : 'No tracks in Supabase database yet'}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEmbedMissing(false)}
-                            disabled={isEmbedding || trackCounts.total === 0}
-                            className="btn btn-secondary px-3 py-1.5 text-xs flex-1"
-                          >
-                            {isEmbedding ? (
-                              <span className="flex items-center justify-center gap-1.5">
-                                <CircleNotch size={12} className="animate-spin" />
-                                {embedProgress ? `${embedProgress.percent}%` : 'Starting...'}
-                              </span>
-                            ) : embedProgress?.done ? (
-                              <span className="flex items-center justify-center gap-1">
-                                <Check size={12} weight="bold" />
-                                Done ({embedProgress.embedded})
-                              </span>
-                            ) : (
-                              `Embed Missing (${trackCounts.total - trackCounts.withEmbedding})`
-                            )}
-                          </button>
-                          <button
-                            onClick={() => handleEmbedMissing(true)}
-                            disabled={isEmbedding || trackCounts.total === 0}
-                            className="btn btn-secondary px-3 py-1.5 text-xs"
-                            title="Re-generate embeddings for all tracks"
-                          >
-                            Re-embed All
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Organization API Keys - Admin only */}
-                  {isAdmin && (
-                    <div className="bg-auris-card/50 rounded-lg p-4 border border-purple-500/30 mt-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Buildings size={16} className="text-purple-400" />
-                        <h3 className="text-sm font-medium text-purple-300">Organization API Keys</h3>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400 ml-auto">Admin</span>
-                      </div>
-                      <p className="text-xs text-auris-text-muted mb-4">
-                        These keys are shared with all users in the organization via Supabase.
-                        Individual user keys (above) take priority if set.
-                      </p>
-                      
-                      {isLoadingGlobalKeys ? (
-                        <div className="flex items-center justify-center py-4">
-                          <CircleNotch size={16} className="text-purple-400 animate-spin" />
-                        </div>
-                      ) : keySources.length === 0 ? (
-                        <p className="text-xs text-auris-text-muted italic">No sources require API keys.</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {keySources.map(src => (
-                            <div key={src.keyName}>
-                              <label className="block text-xs text-auris-text-secondary mb-1">{src.name} Key (all users)</label>
-                              <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                  <input
-                                    type={globalKeyVisibility[src.keyName] ? 'text' : 'password'}
-                                    value={globalKeyValues[src.keyName] || ''}
-                                    onChange={(e) => setGlobalKeyValues(prev => ({ ...prev, [src.keyName]: e.target.value }))}
-                                    placeholder="Enter API key..."
-                                    className="input w-full pr-8 font-mono text-xs py-2"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => setGlobalKeyVisibility(prev => ({ ...prev, [src.keyName]: !prev[src.keyName] }))}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-auris-text-muted hover:text-auris-text transition-colors"
-                                  >
-                                    {globalKeyVisibility[src.keyName] ? <EyeSlash size={14} /> : <Eye size={14} />}
-                                  </button>
-                                </div>
-                                <button
-                                  onClick={() => handleSaveGlobalKey(src.keyName, globalKeyValues[src.keyName] || '')}
-                                  className="btn btn-primary px-3 py-2 text-xs"
-                                  disabled={!globalKeyValues[src.keyName] || globalKeySaving === src.keyName}
-                                >
-                                  {globalKeySaving === src.keyName ? (
-                                    <CircleNotch size={14} className="animate-spin" />
-                                  ) : globalKeySaved === src.keyName ? (
-                                    <span className="flex items-center gap-1"><Check size={14} weight="bold" /> Saved</span>
-                                  ) : (
-                                    'Save'
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {activeTab === 'learned' && (
                 <div className="flex flex-col h-full">
                   {/* Search Bar */}
@@ -953,11 +646,29 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
               {activeTab === 'sources' && (
                 <SourcesPanel 
                   sources={sources}
-                  onConfigureSource={handleConfigureSource}
                   onToggleSource={handleToggleSource}
                   onTestConnection={handleTestConnection}
-                  onAddSource={handleAddSource}
-                  onEditSource={handleEditSource}
+                  onUpdateSources={onUpdateSources}
+                  globalKeyValues={globalKeyValues}
+                  globalKeyVisibility={globalKeyVisibility}
+                  globalKeySaving={globalKeySaving}
+                  globalKeySaved={globalKeySaved}
+                  globalKeyError={globalKeyError}
+                  globalKeyTesting={globalKeyTesting}
+                  globalKeyTestResult={globalKeyTestResult}
+                  isLoadingGlobalKeys={isLoadingGlobalKeys}
+                  keySources={keySources}
+                  setGlobalKeyValues={setGlobalKeyValues}
+                  setGlobalKeyVisibility={setGlobalKeyVisibility}
+                  onSaveGlobalKey={handleSaveGlobalKey}
+                  onTestGlobalKey={handleTestGlobalKey}
+                  setGlobalKeyError={setGlobalKeyError}
+                  setGlobalKeyTestResult={setGlobalKeyTestResult}
+                  setKeySources={setKeySources}
+                  trackCounts={trackCounts}
+                  isEmbedding={isEmbedding}
+                  embedProgress={embedProgress}
+                  onEmbedMissing={handleEmbedMissing}
                 />
               )}
 
@@ -973,7 +684,7 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
                     className="h-8 mx-auto mb-3 opacity-80"
                   />
                   <h3 className="text-base font-semibold mb-1">Auris Cue Sheets</h3>
-                  <p className="text-xs text-auris-text-muted mb-3">Version 0.12.0</p>
+                  <p className="text-xs text-auris-text-muted mb-3">Version 0.16.0</p>
                   <p className="text-xs text-auris-text-muted">
                     Automated cue sheet generator for Premiere Pro
                   </p>
@@ -983,58 +694,6 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
           </div>
         </div>
       </div>
-
-      {/* Config Modal */}
-      {configModal && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
-          onClick={() => setConfigModal(null)}
-        >
-          <div 
-            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-auris-bg-secondary border border-auris-border rounded-xl shadow-2xl w-[360px] p-5 z-[101]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-base font-semibold mb-3">
-              Configure {configModal.charAt(0).toUpperCase() + configModal.slice(1)}
-            </h3>
-            
-            <div className="space-y-3">
-              {getConfigFields(configModal).map(field => (
-                <div key={field.key}>
-                  <label className="block text-xs text-auris-text-secondary mb-1">
-                    {field.label}
-                  </label>
-                  <input
-                    type={field.type}
-                    value={configValues[field.key] || ''}
-                    onChange={(e) => setConfigValues(prev => ({
-                      ...prev,
-                      [field.key]: e.target.value
-                    }))}
-                    placeholder={field.placeholder}
-                    className="input w-full text-sm py-2"
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                onClick={() => setConfigModal(null)}
-                className="btn btn-ghost text-sm py-1.5"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveConfig}
-                className="btn btn-primary text-sm py-1.5"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Testing Overlay */}
       {isTesting && (
@@ -1103,14 +762,6 @@ function SettingsModal({ isOpen, onClose, sources, onUpdateSources }) {
           </div>
         </div>
       )}
-
-      {/* Add/Edit Source Modal */}
-      <AddSourceModal
-        isOpen={showAddSourceModal}
-        onClose={handleAddSourceClose}
-        editSource={editSourceId}
-        defaultCategory={addSourceCategory}
-      />
 
       {/* Edit Track Modal */}
       <EditTrackModal

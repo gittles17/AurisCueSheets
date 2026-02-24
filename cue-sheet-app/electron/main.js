@@ -3319,9 +3319,10 @@ if (supabaseClient.isConfigured()) {
           cloudSourcesManager.setGlobalKeys(keys);
           log.info('[Auth] Global API keys loaded from Supabase');
           if (mainWindow && !mainWindow.isDestroyed()) {
+            const allSources = await cloudSourcesManager.getSources();
             mainWindow.webContents.send('cloudSources:change', {
               type: 'globalKeysUpdated',
-              allSources: sourcesManager.getAllSources()
+              allSources
             });
           }
         }
@@ -3342,6 +3343,13 @@ ipcMain.handle('globalKeys:fetch', async () => {
     if (Object.keys(keys).length > 0) {
       sourcesManager.setGlobalKeys(keys);
       cloudSourcesManager.setGlobalKeys(keys);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const allSources = await cloudSourcesManager.getSources();
+        mainWindow.webContents.send('cloudSources:change', {
+          type: 'globalKeysUpdated',
+          allSources
+        });
+      }
     }
     return keys;
   } catch (error) {

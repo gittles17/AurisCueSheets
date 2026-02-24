@@ -11,6 +11,16 @@ import { useAuth } from '../contexts/AuthContext';
 // Version history - add new versions at the top
 const VERSION_HISTORY = [
   {
+    version: 'v0.16',
+    date: 'February 2026',
+    features: [
+      { title: 'Unified Sources Panel', description: 'All source management (API keys, toggles, health checks) is now in a single Sources tab. No more switching between General and Sources to configure keys and test connections.', icon: CheckCircle },
+      { title: 'Live Health Checks', description: 'API keys are tested immediately after saving, with real-time Connected/Error status shown inline. Custom sources now make real HTTP requests instead of just checking if a key exists.', icon: CheckCircle },
+      { title: 'Add Source', description: 'Admins can add new API sources (with key and test URL) or Smart Look-up sources (with search URL) directly from the Sources tab, no code changes needed.', icon: CheckCircle },
+      { title: 'Global API Key Fixes', description: 'Fixed multiple issues preventing shared API keys from reaching custom sources like West One Music, Audiomachine, and Alibi. Keys now save reliably to Supabase and propagate to all users.', icon: CheckCircle },
+    ]
+  },
+  {
     version: 'v0.15',
     date: 'February 2026',
     features: [

@@ -24,6 +24,17 @@ const DEFAULT_SOURCES = {
     config: {},
     isDefault: true
   },
+  voyage: {
+    id: 'voyage',
+    name: 'Voyage AI',
+    category: 'ai',
+    description: 'Fast vector search for track lookups',
+    enabled: true,
+    requiresKey: true,
+    keyFields: ['apiKey'],
+    config: {},
+    isDefault: true
+  },
 
   // APIs
   itunes: {

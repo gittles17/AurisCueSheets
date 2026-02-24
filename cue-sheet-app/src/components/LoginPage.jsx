@@ -9,14 +9,12 @@ import { useAuth } from '../contexts/AuthContext';
 const ALLOWED_DOMAIN = 'createadvertising.com';
 
 // Version and features
-const VERSION = 'v0.15';
+const VERSION = 'v0.16';
 const WHATS_NEW = [
-  { title: 'Muted Track Filtering', description: 'Muted/disabled tracks in your timeline are automatically excluded on import.' },
-  { title: 'Better Stem Detection', description: 'Stems now match by instrument name and group correctly with parent cues.' },
-  { title: 'Delete Cues', description: 'Permanently remove cues from your sheet with the new trash icon.' },
-  { title: 'Composer/Publisher Fix', description: 'Composer and publisher data now route to the correct fields.' },
-  { title: 'Clean Track Names', description: 'File names are parsed to show clean, readable track names.' },
-  { title: 'Project Tab Fix', description: 'Switching between projects now reliably loads the correct data.' },
+  { title: 'Unified Sources Panel', description: 'All source management (API keys, toggles, health checks) in one place.' },
+  { title: 'Live Health Checks', description: 'API keys are tested immediately after saving, showing real-time status.' },
+  { title: 'Add New Sources', description: 'Add new API or Smart Look-up sources directly from Settings.' },
+  { title: 'Global API Key Fixes', description: 'Fixed multiple issues preventing shared API keys from reaching custom sources.' },
 ];
 
 export default function LoginPage({ onLogin }) {

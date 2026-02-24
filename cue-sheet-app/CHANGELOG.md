@@ -2,6 +2,22 @@
 
 All notable changes to Auris Cue Sheets will be documented in this file.
 
+## [0.16.0] - February 2026
+
+### Fixed
+- **Setup Button Not Working** - The source configuration modal was rendering behind the Settings overlay due to a z-index layering issue. Users could not configure custom API sources.
+- **Global API Keys Not Saving** - Supabase RLS policies blocked writes to the `app_config` table. Switched to service-role client for admin key operations, permanently bypassing RLS restrictions.
+- **Global Keys Not Reaching Custom Sources** - After authentication, the `cloudSources:change` event only included default sources, not cloud custom sources (West One Music, Audiomachine, Alibi). Custom sources never received their global API keys.
+- **Config Merge Losing Global Keys** - SourcesPanel used `||` instead of spread-merge for config objects, so an empty local config would override cloud config containing the global API key.
+
+### Added
+- **Unified Sources Panel** - Consolidated API key management, source toggling, and connection health checks into a single Sources tab. Removed the redundant General tab key sections.
+- **Live Health Checks** - Saving an API key now automatically runs a real connection test and shows Connected/Error status inline.
+- **Add Source (API + Smart Look-up)** - Admins can add new API sources (with key + test URL) or Smart Look-up sources (with search URL) directly from the Sources tab.
+- **Custom Source Health Checks** - Custom API sources now make real HTTP requests to their test/search URL instead of just checking if a key exists.
+
+---
+
 ## [0.15.0] - February 2026
 
 ### Fixed

@@ -402,11 +402,13 @@ async function testConnection(sourceId) {
         break;
       
       default:
-        // For custom sources with API keys, assume connected if key is present
-        if (source.config?.apiKey) {
-          testResult = { success: true };
-        } else {
+        if (!source.config?.apiKey) {
           testResult = { success: false, error: 'API key not configured' };
+        } else {
+          testResult = await testCustomSourceConnection(
+            source.config.apiKey,
+            source.searchUrl || source.search_url || source.testUrl || source.test_url
+          );
         }
     }
 
@@ -528,6 +530,38 @@ async function testOpusConnection(config) {
     }
   } catch (error) {
     console.error('[Opus Test] Connection error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+async function testCustomSourceConnection(apiKey, testUrl) {
+  if (!testUrl) {
+    return { success: true };
+  }
+  try {
+    const response = await fetch(testUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'X-API-Key': apiKey
+      },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (response.ok || response.status === 401 || response.status === 403) {
+      // 401/403 means the endpoint exists and recognized the auth attempt
+      // For some APIs, a GET to the search URL with no query returns 400 but the key is valid
+      return response.ok
+        ? { success: true }
+        : { success: false, error: `Authentication failed (${response.status})` };
+    }
+    if (response.status >= 400 && response.status < 500) {
+      return { success: true };
+    }
+    return { success: false, error: `Server error (${response.status})` };
+  } catch (error) {
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+      return { success: false, error: 'Connection timed out' };
+    }
     return { success: false, error: error.message };
   }
 }
